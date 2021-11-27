@@ -1,7 +1,6 @@
 --source include/have_plugin_auth.inc
---source include/not_embedded.inc
 
-if (!$SERVER_AUDIT_SO) {
+if (!`select count(*) FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME='server_audit'`) {
   skip No SERVER_AUDIT plugin;
 }
 
@@ -11,8 +10,6 @@ source include/wait_until_count_sessions.inc;
 
 let $MYSQLD_DATADIR= `SELECT @@datadir`;
 let SEARCH_FILE= $MYSQLD_DATADIR/server_audit.log;
-
-install plugin server_audit soname 'server_audit';
 
 show variables like 'server_audit%';
 set global server_audit_file_path=null;
@@ -38,146 +35,132 @@ source include/wait_for_line_count_in_file.inc;
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --error ER_ACCESS_DENIED_ERROR
 connect (con1,localhost,no_such_user,,mysql);
-let SEARCH_COUNT= 9;
+let SEARCH_COUNT= 8;
 source include/wait_for_line_count_in_file.inc;
 
 connection default;
 set global server_audit_incl_users='odin, dva, tri';
-create table t1 (id int);
+create table t1_default (id int);
 set global server_audit_incl_users='odin, root, dva, tri';
-create table t2 (id int);
+create table t2_default (id int);
+# No warnings will be shown due to MySQL limitation on CLIENT_ERROR
 set global server_audit_excl_users='odin, dva, tri';
-insert into t1 values (1), (2);
-select * from t1;
+insert into t1_default values (1), (2);
+select * from t1_default;
 set global server_audit_incl_users='odin, root, dva, tri';
-insert into t2 values (1), (2);
-select * from t2;
-alter table t1 rename renamed_t1;
+insert into t2_default values (1), (2);
+select * from t2_default;
+alter table t1_default rename renamed_t1_default;
 set global server_audit_events='connect,query';
 select 1,
         2,
 # comment
         3;
-insert into t2 values (1), (2);
-select * from t2;
+insert into t2_default values (1), (2);
+select * from t2_default;
 --disable_ps_protocol
 --error ER_NO_SUCH_TABLE
 select * from t_doesnt_exist;
 --enable_ps_protocol
 --error 1064
 syntax_error_query;
-drop table renamed_t1, t2;
+drop table renamed_t1_default, t2_default;
 show variables like 'server_audit%';
-set global server_audit_mode=1;
 set global server_audit_events='';
 create database sa_db;
-let SEARCH_COUNT= 47;
+let SEARCH_COUNT= 28;
 source include/wait_for_line_count_in_file.inc;
 
 connect (con1,localhost,root,,test);
-create table t1 (id2 int);
-insert into t1 values (1), (2);
-select * from t1;
-drop table t1;
+create table t1_empty (id2 int);
+insert into t1_empty values (1), (2);
+select * from t1_empty;
+drop table t1_empty;
 use sa_db;
-create table sa_t1(id int);
-insert into sa_t1 values (1), (2);
-drop table sa_t1;
+create table sa_t1_empty(id int);
+insert into sa_t1_empty values (1), (2);
+drop table sa_t1_empty;
 drop database sa_db;
 disconnect con1;
-let SEARCH_COUNT= 80;
+let SEARCH_COUNT= 39;
 source include/wait_for_line_count_in_file.inc;
 
 connection default;
 create database sa_db;
 use sa_db;
-CREATE USER u1 IDENTIFIED BY 'pwd-123';
-GRANT ALL ON sa_db TO u2 IDENTIFIED BY "pwd-321";
-SET PASSWORD FOR u1 = PASSWORD('pwd 098');
-CREATE USER u3 IDENTIFIED BY '';
-ALTER USER u3 IDENTIFIED BY 'pwd-456';
-drop user u1, u2, u3;
+CREATE USER u1_empty IDENTIFIED BY 'pwd-123';
+--error 1064
+GRANT ALL ON sa_db TO u2_empty IDENTIFIED BY "pwd-321";
+SET PASSWORD FOR u1_empty = 'pwd 098';
+CREATE USER u3_empty IDENTIFIED BY '';
+ALTER USER u3_empty IDENTIFIED BY 'pwd-456';
+drop user u1_empty, u3_empty;
 
 set global server_audit_events='query_ddl';
-create table t1(id int);
-insert into t1 values (1), (2);
-select * from t1;
+create table t1_ddl(id int);
+insert into t1_ddl values (1), (2);
+select * from t1_ddl;
 select 2;
 (select 2);
 /*! select 2*/;
 /*comment*/ select 2;
-drop table t1;
-
-create procedure pr1() insert into test.t1 values ("foo", 42);
-create function fn1(i int) returns int deterministic return i+1;
-drop procedure pr1;
-drop function fn1;
-
+drop table t1_ddl;
 set global server_audit_events='query_ddl,query_dml';
-create table t1(id int);
-insert into t1 values (1), (2);
-select * from t1;
+create table t1_ddl_dml(id int);
+insert into t1_ddl_dml values (1), (2);
+select * from t1_ddl_dml;
 select 2;
-drop table t1;
+drop table t1_ddl_dml;
 set global server_audit_events='query_dml';
-create table t1(id int);
-insert into t1 values (1), (2);
-select * from t1;
+create table t1_dml(id int);
+insert into t1_dml values (1), (2);
+select * from t1_dml;
 select 2;
 (select 2);
 /*! select 2*/;
 /*comment*/ select 2;
-drop table t1;
+drop table t1_dml;
 set global server_audit_events='query_dcl';
-create table t1(id int);
-insert into t1 values (1), (2);
-select * from t1;
-CREATE USER u1 IDENTIFIED BY 'pwd-123';
-GRANT ALL ON sa_db TO u2 IDENTIFIED BY "pwd-321";
-SET PASSWORD 
+create table t1_dcl(id int);
+insert into t1_dcl values (1), (2);
+select * from t1_dcl;
+CREATE USER u1_dcl IDENTIFIED BY 'pwd-123';
+--error 1064
+GRANT ALL ON sa_db TO u2_dcl IDENTIFIED BY "pwd-321";
+SET PASSWORD
 # comment
-FOR u1 = PASSWORD('pwd 098');
+FOR u1_dcl = 'pwd 098';
 --error 1064
 SET PASSWORD FOR u1=<secret>;
-CREATE USER u3 IDENTIFIED BY '';
-drop user u1, u2, u3;
+CREATE USER u3_dcl IDENTIFIED BY '';
+drop user u1_dcl, u3_dcl;
 select 2;
 (select 2);
 /*! select 2*/;
 /*comment*/ select 2;
-drop table t1;
+drop table t1_dcl;
 set global server_audit_events='query_dml_no_select';
-create table t1(id int);
-insert into t1 values (1), (2);
-select * from t1;
+create table t1_no_select(id int);
+insert into t1_no_select values (1), (2);
+select * from t1_no_select;
 select 2;
-drop table t1;
-create procedure pr1() insert into test.t1 values ("foo", 42);
-create function fn1(i int) returns int deterministic return i+1;
-drop procedure pr1;
-drop function fn1;
+drop table t1_no_select;
 
-create procedure pr1() insert into test.t1 values ("foo", 42);
-create function fn1(i int) returns int deterministic return i+1;
-drop procedure pr1;
-drop function fn1;
-
-set global server_audit_events='table';
+set global server_audit_events='';
 set global server_audit_incl_users='user1';
 
-create user user1@localhost;
-grant all on sa_db.* to user1@localhost;
+create user user1_empty@localhost;
+grant all on sa_db.* to user1_empty@localhost;
 
-connect (cn1,localhost,user1,,sa_db);
+connect (cn1,localhost,user1_empty,,sa_db);
 connection cn1;
 
-create table t1(id int) engine=myisam;
-insert delayed into t1 values (1);
+create table t1_empty(id int) engine=myisam;
+insert into t1_empty values (1);
 connection default;
---echo # Waiting until INSERT DELAYED thread does the insert.
-let $wait_condition= SELECT COUNT(*) = 1 FROM t1;
+let $wait_condition= SELECT COUNT(*) = 1 FROM t1_empty;
 --source include/wait_condition.inc
-drop table t1;
+drop table t1_empty;
 
 set global server_audit_logging= off;
 set global server_audit_incl_users='root';
@@ -186,16 +169,15 @@ disconnect cn1;
 let $count_sessions=1;
 source include/wait_until_count_sessions.inc;
 
-drop user user1@localhost;
+drop user user1_empty@localhost;
 
-set global server_audit_events='';
 set global server_audit_incl_users='root, plug_dest';
 
 CREATE USER plug IDENTIFIED WITH 'test_plugin_server' AS 'plug_dest';
 CREATE USER plug_dest IDENTIFIED BY 'plug_dest_passwd';
 --sleep 2
 --replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
---error ER_ACCESS_DENIED_ERROR : this should fail : no grant
+--error ER_ACCESS_DENIED_ERROR
 connect(plug_con,localhost,plug,plug_dest);
 --sleep 2
 GRANT PROXY ON plug_dest TO plug;
@@ -216,8 +198,6 @@ select 'A', 'B', 'C', 'D';
 set global server_audit_query_log_limit= 1024;
 drop database sa_db;
 
-select length('01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789');
-
 set global server_audit_file_path='.';
 --replace_regex /\.[\\\/]/HOME_DIR\//
 show status like 'server_audit_current_log';
@@ -225,6 +205,7 @@ set global server_audit_file_path='';
 show status like 'server_audit_current_log';
 set global server_audit_file_path='  ';
 show status like 'server_audit_current_log';
+# No warnings will be shown due to MySQL limitation on CLIENT_ERROR
 set global server_audit_file_path='nonexisting_dir/';
 show status like 'server_audit_current_log';
 show variables like 'server_audit%';
@@ -234,4 +215,3 @@ uninstall plugin server_audit;
 --replace_regex /[0-9]* [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\,[^,]*\,/TIME,HOSTNAME,/ /\,[1-9][0-9]*\,/,1,/ /\,[1-9][0-9]*/,ID/
 cat_file $MYSQLD_DATADIR/server_audit.log;
 remove_file $MYSQLD_DATADIR/server_audit.log;
-

@@ -1,4 +1,7 @@
 /* Copyright (C) 2012 Monty Program Ab
+   Copyright (C) 2021 Amazon.com, Inc. or its affiliates.
+   SPDX-License-Identifier: GPL-2.0
+
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -13,38 +16,51 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335 USA */
 
-
 #ifndef FLOGGER_SKIP_INCLUDES
-#include "my_global.h"
 #include <my_sys.h>
 #include <m_string.h>
-#include <mysql/service_logger.h>
-#include <my_pthread.h>
+#include <my_thread.h>
+#include <my_config.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include "mysql/components/services/psi_mutex_bits.h"
+#include "my_io.h"
+#include "sql/mysqld.h"
+#include "my_thread_local.h"
+#include "mysql/service_mysql_alloc.h"
+#include "mysql/psi/mysql_mutex.h"
+#include "service_logger.h"
 #endif /*FLOGGER_SKIP_INCLUDES*/
 
-#ifndef flogger_mutex_init
-#define flogger_mutex_init(A,B,C) mysql_mutex_init(A,B,C)
-#define flogger_mutex_destroy(A) mysql_mutex_destroy(A)
-#define flogger_mutex_lock(A) mysql_mutex_lock(A)
-#define flogger_mutex_unlock(A) mysql_mutex_unlock(A)
-#endif /*flogger_mutex_init*/
+#undef flogger_mutex_init
+#undef flogger_mutex_destroy
+#undef flogger_mutex_lock
+#undef flogger_mutex_unlock
+#undef mysql_mutex_real_mutex
+
+#define mysql_mutex_real_mutex(A) &(A)->lock.m_mutex.m_u.m_native
+
+#define flogger_mutex_init(A, B, C) pthread_mutex_init(mysql_mutex_real_mutex(B), C)
+
+#define flogger_mutex_destroy(A) pthread_mutex_destroy(mysql_mutex_real_mutex(A))
+
+#define flogger_mutex_lock(A) pthread_mutex_lock(mysql_mutex_real_mutex(A))
+
+#define flogger_mutex_unlock(A) pthread_mutex_unlock(mysql_mutex_real_mutex(A))
 
 #ifdef HAVE_PSI_INTERFACE
 /* These belong to the service initialization */
+static PSI_memory_key key_memory_server_audit_logger_handle;
 static PSI_mutex_key key_LOCK_logger_service;
-static PSI_mutex_info mutex_list[]=
-{{ &key_LOCK_logger_service, "logger_service_file_st::lock", PSI_FLAG_GLOBAL}};
+
+static PSI_mutex_info mutex_list[] = {
+  {&key_LOCK_logger_service, "logger_handle_st::lock",
+   PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
+};
+
+#else
+#define key_memory_server_audit_logger_handle PSI_NOT_INSTRUMENTED
 #endif
-
-typedef struct logger_handle_st {
-  File file;
-  char path[FN_REFLEN];
-  unsigned long long size_limit;
-  unsigned int rotations;
-  size_t path_len;
-  mysql_mutex_t lock;
-} LSFS;
-
 
 #define LOG_FLAGS (O_APPEND | O_CREAT | O_WRONLY)
 
@@ -63,8 +79,10 @@ LOGGER_HANDLE *logger_open(const char *path,
     I don't think we ever need more rotations,
     but if it's so, the rotation procedure should be adapted to it.
   */
-  if (rotations > 999)
+  if (rotations > 999){
+    fprintf(stderr, "Number of rotations is greater than 999, skipping..\n");
     return 0;
+  }
 
   new_log.rotations= rotations;
   new_log.size_limit= size_limit;
@@ -79,20 +97,19 @@ LOGGER_HANDLE *logger_open(const char *path,
   }
   if ((new_log.file= my_open(new_log.path, LOG_FLAGS, MYF(0))) < 0)
   {
-    errno= my_errno;
+    errno= my_errno();
     /* Check errno for the cause */
     return 0;
   }
 
-  if (!(l_perm= (LOGGER_HANDLE *) my_malloc(PSI_INSTRUMENT_ME,
-                                            sizeof(LOGGER_HANDLE), MYF(0))))
+  if (!(l_perm= (LOGGER_HANDLE *) my_malloc(key_memory_server_audit_logger_handle, sizeof(LOGGER_HANDLE), MYF(0))))
   {
     my_close(new_log.file, MYF(0));
     new_log.file= -1;
     return 0; /* End of memory */
   }
   *l_perm= new_log;
-  flogger_mutex_init(key_LOCK_logger_service, &l_perm->lock,
+  flogger_mutex_init(key_LOCK_logger_service, l_perm,
                      MY_MUTEX_INIT_FAST);
   return l_perm;
 }
@@ -101,21 +118,25 @@ int logger_close(LOGGER_HANDLE *log)
 {
   int result;
   File file= log->file;
-  flogger_mutex_destroy(&log->lock);
+  flogger_mutex_destroy(log);
   my_free(log);
   if ((result= my_close(file, MYF(0))))
-    errno= my_errno;
+    errno= my_errno();
   return result;
 }
 
 
 static char *logname(LOGGER_HANDLE *log, char *buf, unsigned int n_log)
 {
-  sprintf(buf+log->path_len, ".%0*u", n_dig(log->rotations), n_log);
+  int count_dig= n_dig(log->rotations);
+  int suffix_len= (count_dig == 0) ? 3 : count_dig+2;
+  snprintf(buf+log->path_len, suffix_len, ".%0*u", count_dig, n_log);
   return buf;
 }
 
-
+/*
+  do_rotate returns either 0 or 1
+*/
 static int do_rotate(LOGGER_HANDLE *log)
 {
   char namebuf[FN_REFLEN];
@@ -146,16 +167,15 @@ static int do_rotate(LOGGER_HANDLE *log)
   result= my_rename(namebuf, logname(log, log->path, 1), MYF(0));
   log->file= my_open(namebuf, LOG_FLAGS, MYF(0));
 exit:
-  errno= my_errno;
+  errno= my_errno();
   return log->file < 0 || result;
 }
-
 
 /*
    Return 1 if we should rotate the log
 */
 
-my_bool logger_time_to_rotate(LOGGER_HANDLE *log)
+bool logger_time_to_rotate(LOGGER_HANDLE *log)
 {
   my_off_t filesize;
   if (log->rotations > 0 &&
@@ -166,83 +186,39 @@ my_bool logger_time_to_rotate(LOGGER_HANDLE *log)
 }
 
 
-int logger_vprintf(LOGGER_HANDLE *log, const char* fmt, va_list ap)
-{
-  int result;
-  char cvtbuf[1024];
-  size_t n_bytes;
-
-  flogger_mutex_lock(&log->lock);
-  if (logger_time_to_rotate(log) && do_rotate(log))
-  {
-    result= -1;
-    errno= my_errno;
-    goto exit; /* Log rotation needed but failed */
-  }
-
-  n_bytes= my_vsnprintf(cvtbuf, sizeof(cvtbuf), fmt, ap);
-  if (n_bytes >= sizeof(cvtbuf))
-    n_bytes= sizeof(cvtbuf) - 1;
-
-  result= (int)my_write(log->file, (uchar *) cvtbuf, n_bytes, MYF(0));
-
-exit:
-  flogger_mutex_unlock(&log->lock);
-  return result;
-}
-
-
-static int logger_write_r(LOGGER_HANDLE *log, my_bool allow_rotations,
+int logger_write_r(LOGGER_HANDLE *log, bool allow_rotations,
                           const char *buffer, size_t size)
 {
   int result;
 
-  flogger_mutex_lock(&log->lock);
+  flogger_mutex_lock(log);
   if (allow_rotations && logger_time_to_rotate(log) && do_rotate(log))
   {
     result= -1;
-    errno= my_errno;
+    errno= my_errno();
     goto exit; /* Log rotation needed but failed */
   }
 
-  result= (int)my_write(log->file, (uchar *) buffer, size, MYF(0));
+  result= (int)my_write(log->file, (const uchar *)buffer, size, MYF(0));
 
 exit:
-  flogger_mutex_unlock(&log->lock);
+  flogger_mutex_unlock(log);
   return result;
-}
-
-
-int logger_write(LOGGER_HANDLE *log, const char *buffer, size_t size)
-{
-  return logger_write_r(log, TRUE, buffer, size);
 }
 
 int logger_rotate(LOGGER_HANDLE *log)
 {
   int result;
-  flogger_mutex_lock(&log->lock);
+  flogger_mutex_lock(log);
   result= do_rotate(log);
-  flogger_mutex_unlock(&log->lock);
+  flogger_mutex_unlock(log);
   return result;
 }
 
-
-int logger_printf(LOGGER_HANDLE *log, const char *fmt, ...)
-{
-  int result;
-  va_list args;
-  va_start(args,fmt);
-  result= logger_vprintf(log, fmt, args);
-  va_end(args);
-  return result;
-}
 
 void logger_init_mutexes()
 {
-#ifdef HAVE_PSI_INTERFACE
-  if (unlikely(PSI_server))
-    PSI_server->register_mutex("sql_logger", mutex_list, 1);
+#if defined(HAVE_PSI_INTERFACE) && !defined(FLOGGER_NO_PSI)
+    mysql_mutex_register("audit_logger", mutex_list, array_elements(mutex_list));
 #endif
 }
-

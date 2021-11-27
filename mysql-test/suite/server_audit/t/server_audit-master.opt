@@ -1,2 +1,4 @@
 --thread_handling='one-thread-per-connection'
-
+$PLUGIN_AUTH_OPT
+$PLUGIN_AUTH_LOAD_ADD
+$SERVER_AUDIT_LOAD_ADD
