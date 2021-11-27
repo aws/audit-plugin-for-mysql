@@ -1,3 +1,0 @@
---let $TEST_ENGINE_TYPE= $CHILD2_1_ENGINE_TYPE
---let $INIT_TEST_ENGINE= $INIT_CHILD2_1_ENGINE
---source ../include/deinit_engine.inc

@@ -1,4 +1,0 @@
-[nonparallel]
-
-[parallel]
---slave-parallel-threads=10

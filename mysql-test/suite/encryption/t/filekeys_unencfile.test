@@ -1,2 +1,0 @@
-let SEARCH_PATTERN=Cannot decrypt .*keys.txt. Not encrypted;
-source filekeys_badtest.inc;

@@ -1,2 +1,0 @@
---source include/have_binlog_format_statement.inc
---source read_only.inc

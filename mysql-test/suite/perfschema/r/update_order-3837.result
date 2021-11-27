@@ -1,1 +1,0 @@
-UPDATE performance_schema.setup_instruments SET timed = 'YES' ORDER BY name;

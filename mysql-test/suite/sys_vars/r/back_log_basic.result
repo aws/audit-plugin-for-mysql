@@ -1,3 +1,0 @@
-select @@global.back_log;
-@@global.back_log
-1000

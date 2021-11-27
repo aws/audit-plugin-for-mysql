@@ -1,1 +1,0 @@
---source include/have_innodb.inc

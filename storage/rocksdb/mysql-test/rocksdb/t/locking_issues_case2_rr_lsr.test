@@ -1,5 +1,0 @@
---source include/have_rocksdb.inc
-
-let $lock_scanned_rows=1;
-let $isolation_level = REPEATABLE READ;
---source include/locking_issues_case2.inc

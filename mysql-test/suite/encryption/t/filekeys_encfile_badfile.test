@@ -1,2 +1,0 @@
-let SEARCH_PATTERN=File 'bad' not found;
-source filekeys_badtest.inc;

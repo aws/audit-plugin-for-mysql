@@ -1,3 +1,0 @@
-select count(*) from t4;
-count(*)
-193

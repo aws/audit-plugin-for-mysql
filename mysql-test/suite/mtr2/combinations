@@ -1,5 +1,0 @@
-[1st]
-lock-wait-timeout=5
-
-[2nd]
-lock-wait-timeout=3

@@ -1,1 +1,0 @@
---source sql_mode_deinit.inc

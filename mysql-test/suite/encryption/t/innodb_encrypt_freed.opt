@@ -1,4 +1,0 @@
---innodb-encrypt-tables
---innodb-encrypt-log
---innodb-encryption-threads=1
---innodb-tablespaces-encryption

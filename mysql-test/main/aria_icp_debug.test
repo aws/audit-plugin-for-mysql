@@ -1,5 +1,0 @@
-
-set default_storage_engine=aria;
---source include/icp_debug_kill.inc
-set default_storage_engine=default;
-

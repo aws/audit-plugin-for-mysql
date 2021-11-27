@@ -1,2 +1,0 @@
-let $engine_type=myisam;
--- source include/rpl_EE_err.test

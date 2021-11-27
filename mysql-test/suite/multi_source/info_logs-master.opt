@@ -1,1 +1,0 @@
---relay-log=relay.bin --relay-log-info-file=relay.bin.info

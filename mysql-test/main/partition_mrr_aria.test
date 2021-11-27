@@ -1,2 +1,0 @@
-let $engine_type= Aria;
---source include/partition_mrr.inc

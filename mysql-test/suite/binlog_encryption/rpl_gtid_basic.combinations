@@ -1,6 +1,0 @@
-[cmpr]
-log-bin-compress=1
-log-bin-compress-min-len=10
-
-[ncmpr]
-log-bin-compress=0

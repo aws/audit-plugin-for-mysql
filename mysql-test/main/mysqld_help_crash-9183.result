@@ -1,3 +1,0 @@
-rename table mysql.plugin to test.plugin;
-flush tables;
-rename table test.plugin to mysql.plugin;

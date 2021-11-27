@@ -1,2 +1,0 @@
-etc/mysql/mariadb.conf.d/provider_bzip2.cnf
-usr/lib/mysql/plugin/provider_bzip2.so

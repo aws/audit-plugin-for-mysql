@@ -1,7 +1,0 @@
-connect  con1,localhost,root,,;
-CREATE TEMPORARY SEQUENCE f ENGINE=InnoDB;
-disconnect con1;
-connection default;
-SELECT 'Still alive' AS `Heartbeat`;
-Heartbeat
-Still alive

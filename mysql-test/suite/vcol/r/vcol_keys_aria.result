@@ -1,2 +1,0 @@
-create table t1 (a int, b int as (a+1), c int, index(b)) engine=aria;
-ERROR HY000: Key/Index cannot be defined on a virtual generated column

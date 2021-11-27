@@ -1,1 +1,0 @@
---eval SET GLOBAL wsrep_provider_options = 'dbug=d,$galera_sync_point'

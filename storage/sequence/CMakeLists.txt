@@ -1,1 +1,0 @@
-MYSQL_ADD_PLUGIN(sequence sequence.cc STORAGE_ENGINE DEFAULT)

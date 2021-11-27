@@ -1,2 +1,0 @@
---innodb-tablespaces-encryption
---plugin-load-add=$DEBUG_KEY_MANAGEMENT_SO

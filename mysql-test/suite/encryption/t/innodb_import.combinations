@@ -1,7 +1,0 @@
-[page_compressed]
-innodb-compression-default=1
-[encryption]
-innodb-encrypt-tables=1
-[page_compressed_encryption]
-innodb-compression-default=1
-innodb-encrypt-tables=1

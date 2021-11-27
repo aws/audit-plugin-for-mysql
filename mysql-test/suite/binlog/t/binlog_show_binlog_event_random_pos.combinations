@@ -1,5 +1,0 @@
-[enable_checksum]
-binlog_checksum=1
-
-[disable_checksum]
-binlog_checksum=0

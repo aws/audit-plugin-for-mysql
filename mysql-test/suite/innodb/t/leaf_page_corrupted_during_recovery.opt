@@ -1,2 +1,0 @@
---skip-innodb-doublewrite
---skip-innodb-buffer-pool-load-at-startup

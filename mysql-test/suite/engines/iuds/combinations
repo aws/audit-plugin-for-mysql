@@ -1,8 +1,0 @@
-[innodb]
-innodb
-default-storage-engine=innodb
-
-[myisam]
-skip-innodb
-default-storage-engine=myisam
-

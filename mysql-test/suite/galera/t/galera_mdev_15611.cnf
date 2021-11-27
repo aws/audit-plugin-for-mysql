@@ -1,5 +1,0 @@
-!include ../galera_2nodes.cnf
-[mysqld.1]
-
-[mysqld.2]
-wsrep_slave_threads=6

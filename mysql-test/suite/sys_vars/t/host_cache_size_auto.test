@@ -1,1 +1,0 @@
-select @@global.host_cache_size;

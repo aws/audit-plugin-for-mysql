@@ -1,1 +1,0 @@
---init_connect="select * from test.t1 where 0"

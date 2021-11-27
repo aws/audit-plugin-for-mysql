@@ -1,4 +1,0 @@
-SET GLOBAL log_tc_size=1;
-ERROR HY000: Variable 'log_tc_size' is a read only variable
-SET SESSION log_tc_size=1;
-ERROR HY000: Variable 'log_tc_size' is a read only variable

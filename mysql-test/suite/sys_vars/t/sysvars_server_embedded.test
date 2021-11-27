@@ -1,2 +1,0 @@
-source include/is_embedded.inc;
-source inc/sysvars_server.inc;

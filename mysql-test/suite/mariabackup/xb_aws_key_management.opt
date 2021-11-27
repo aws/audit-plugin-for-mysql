@@ -1,3 +1,0 @@
---plugin-load-add=$AWS_KEY_MANAGEMENT_SO
---loose-aws-key-management
---loose-aws-key-management-mock=ON

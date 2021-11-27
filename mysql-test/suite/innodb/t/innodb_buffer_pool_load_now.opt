@@ -1,3 +1,0 @@
---innodb-buffer-pool-size=64M
---skip-innodb-buffer-pool-load-at-startup
---skip-innodb-buffer-pool-dump-at-shutdown

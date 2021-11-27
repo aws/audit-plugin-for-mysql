@@ -1,3 +1,0 @@
-select @@sql_safe_updates;
-@@sql_safe_updates
-1

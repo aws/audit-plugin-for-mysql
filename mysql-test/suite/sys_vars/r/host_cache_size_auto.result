@@ -1,3 +1,0 @@
-select @@global.host_cache_size;
-@@global.host_cache_size
-653

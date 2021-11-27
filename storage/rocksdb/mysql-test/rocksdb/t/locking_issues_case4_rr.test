@@ -1,4 +1,0 @@
---source include/have_rocksdb.inc
-
-let $isolation_level = REPEATABLE READ;
---source include/locking_issues_case4.inc

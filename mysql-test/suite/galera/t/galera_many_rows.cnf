@@ -1,5 +1,0 @@
-!include ../galera_2nodes.cnf
-
-[mysqld]
-innodb-status-output=ON
-innodb-status-output-locks=ON
