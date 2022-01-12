@@ -36,6 +36,7 @@ the tests accordingly.
 
 ***Note*** MySQL does not support a thread pool, so there is only one test for
 MySQL 8.0 to test audit plugin functionality with a single thread.
+* Due to the limitation of MySQL5.7 MTR test framework, the current audit plugin MTR test cannot generate generic test result. The test result contains the specific timestamp and host information. You have to run the test to verify the functionalities of the audit plugin manually.
 
 ## Running test suite with mysql-test-run
 
@@ -43,7 +44,10 @@ MySQL 8.0 to test audit plugin functionality with a single thread.
 
 To register the audit plugin MTR test, add the following line to `/mysql-test/include/plugin.defs`:
 
-    server_audit    plugin_output_directory   no SERVER_AUDIT   server_audit
+    server_audit       plugin/server_audit  SERVER_AUDIT    server_audit
+then add the following line to `/mysql-test/mysql-test-run.pl`
+
+`my $DEFAULT_SUITES= "main,sys_vars,binlog,federated,gis,rpl,innodb,innodb_gis,innodb_fts,innodb_zip,innodb_undo,perfschema,funcs_1,opt_trace,parts,auth_sec,query_rewrite_plugins,gcol,sysschema,test_service_sql_api,json,connection_control,server_audit";`
 
 ### Load plugin
 

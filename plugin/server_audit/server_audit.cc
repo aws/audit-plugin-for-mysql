@@ -23,7 +23,7 @@
 
 #include <my_config.h>
 #include <assert.h>
-#include "sql/log.h"
+#include "log.h"
 
 #ifndef _WIN32
 #define DO_SYSLOG
@@ -95,6 +95,8 @@ static void closelog() {}
 #include <sys/stat.h>
 #endif
 
+#include <my_global.h>
+#include <dlfcn.h>
 #include <my_base.h>
 #include <typelib.h>
 #include <mysql/plugin.h>
@@ -138,13 +140,20 @@ static char const *default_home= ".";
 #endif
 #endif /*!MARIADB_ONLY*/
 
+#define FLOGGER_SKIP_INCLUDES
+
 #undef flogger_mutex_init
 #undef flogger_mutex_destroy
 #undef flogger_mutex_lock
 #undef flogger_mutex_unlock
 #undef mysql_mutex_real_mutex
 
-#define mysql_mutex_real_mutex(A) &(A)->m_mutex.m_u.m_native
+/* How to access the pthread_mutex in mysql_mutex_t */
+#ifdef SAFE_MUTEX
+#define mysql_mutex_real_mutex(A) &(A)->m_mutex.mutex
+#else
+#define mysql_mutex_real_mutex(A) &(A)->m_mutex
+#endif
 
 #define flogger_mutex_init(A,B,C) pthread_mutex_init(mysql_mutex_real_mutex(B), C)
 #define flogger_mutex_destroy(A) pthread_mutex_destroy(mysql_mutex_real_mutex(A))
@@ -167,8 +176,6 @@ static char const *default_home= ".";
 #define localtime_r(a, b) localtime_s(b, a)
 #endif /*WIN32*/
 
-typedef bool my_bool;
-
 extern MYSQL_PLUGIN_IMPORT char server_version[];
 static const char *serv_ver= NULL;
 static int debug_server_started= 0;
@@ -177,13 +184,13 @@ static char *incl_users, *excl_users,
             *file_path, *syslog_info;
 static char path_buffer[FN_REFLEN];
 static ulong output_type;
-static ulong syslog_facility, syslog_priority;
+static ulong sa_syslog_facility, syslog_priority;
 
 static ulonglong events; /* mask for events to log */
 static unsigned long long file_rotate_size;
 static unsigned int rotations;
-static my_bool rotate= true;
-static bool logging;
+static my_bool rotate= TRUE;
+static my_bool logging;
 static volatile int internal_stop_logging= 0;
 static char incl_user_buffer[1024];
 static char excl_user_buffer[1024];
@@ -232,31 +239,32 @@ struct connection_info
 #define DEFAULT_FILENAME_LEN 16
 static char default_file_name[DEFAULT_FILENAME_LEN+1]= "server_audit.log";
 
-static void update_file_path(MYSQL_THD thd, struct SYS_VAR *var,
+typedef struct st_mysql_sys_var SYS_VAR;
+static void update_file_path(MYSQL_THD thd, SYS_VAR *var,
                              void *var_ptr, const void *save);
-static void update_file_rotate_size(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_file_rotate_size(MYSQL_THD thd, SYS_VAR *var,
                                     void *var_ptr, const void *save);
-static void update_file_rotations(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_file_rotations(MYSQL_THD thd, SYS_VAR *var,
                                   void *var_ptr, const void *save);
-static void update_incl_users(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_incl_users(MYSQL_THD thd, SYS_VAR *var,
                               void *var_ptr, const void *save);
-static int check_incl_users(MYSQL_THD thd, struct SYS_VAR *var, void *save,
+static int check_incl_users(MYSQL_THD thd, SYS_VAR *var, void *save,
                             struct st_mysql_value *value);
-static int check_excl_users(MYSQL_THD thd, struct SYS_VAR *var, void *save,
+static int check_excl_users(MYSQL_THD thd, SYS_VAR *var, void *save,
                             struct st_mysql_value *value);
-static void update_excl_users(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_excl_users(MYSQL_THD thd, SYS_VAR *var,
                               void *var_ptr, const void *save);
-static void update_output_type(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_output_type(MYSQL_THD thd, SYS_VAR *var,
                                void *var_ptr, const void *save);
-static void update_syslog_facility(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_syslog_facility(MYSQL_THD thd, SYS_VAR *var,
                                    void *var_ptr, const void *save);
-static void update_syslog_priority(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_syslog_priority(MYSQL_THD thd, SYS_VAR *var,
                                    void *var_ptr, const void *save);
-static void update_logging(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_logging(MYSQL_THD thd, SYS_VAR *var,
                            void *var_ptr, const void *save);
-static void update_syslog_ident(MYSQL_THD thd, struct SYS_VAR *var,
+static void update_syslog_ident(MYSQL_THD thd, SYS_VAR *var,
                                 void *var_ptr, const void *save);
-static void rotate_log(MYSQL_THD thd, struct SYS_VAR *var,
+static void rotate_log(MYSQL_THD thd, SYS_VAR *var,
                        void *var_ptr, const void *save);
 
 static MYSQL_SYSVAR_STR(incl_users, incl_users, PLUGIN_VAR_RQCMDARG,
@@ -321,10 +329,10 @@ static MYSQL_SYSVAR_UINT(file_rotations, rotations,
        PLUGIN_VAR_RQCMDARG, "Number of rotations before log is removed.",
        NULL, update_file_rotations, 9, 0, 999, 1);
 static MYSQL_SYSVAR_BOOL(file_rotate_now, rotate, PLUGIN_VAR_OPCMDARG,
-       "Force log rotation now.", NULL, rotate_log, false);
+       "Force log rotation now.", NULL, rotate_log, FALSE);
 static MYSQL_SYSVAR_BOOL(logging, logging,
        PLUGIN_VAR_OPCMDARG, "Turn on/off the logging.", NULL,
-       update_logging, 0);
+       update_logging, FALSE);
 static MYSQL_SYSVAR_STR(syslog_ident, syslog_ident, PLUGIN_VAR_RQCMDARG,
        "The SYSLOG identifier - the beginning of each SYSLOG record.",
        NULL, update_syslog_ident, syslog_ident_buffer);
@@ -377,7 +385,7 @@ static TYPELIB syslog_facility_typelib=
     array_elements(syslog_facility_names) - 1, "syslog_facility_typelib",
     syslog_facility_names, NULL
 };
-static MYSQL_SYSVAR_ENUM(syslog_facility, syslog_facility, PLUGIN_VAR_RQCMDARG,
+static MYSQL_SYSVAR_ENUM(syslog_facility, sa_syslog_facility, PLUGIN_VAR_RQCMDARG,
        "The 'facility' parameter of the SYSLOG record."
        " The default is LOG_USER.", 0, update_syslog_facility, 0/*LOG_USER*/,
        &syslog_facility_typelib);
@@ -407,7 +415,8 @@ static MYSQL_SYSVAR_ENUM(syslog_priority, syslog_priority, PLUGIN_VAR_RQCMDARG,
        " The default is LOG_INFO.", 0, update_syslog_priority, 6/*LOG_INFO*/,
        &syslog_priority_typelib);
 
-static struct SYS_VAR* vars[] = {
+
+static SYS_VAR* vars[] = {
     MYSQL_SYSVAR(incl_users),
     MYSQL_SYSVAR(excl_users),
     MYSQL_SYSVAR(events),
@@ -434,7 +443,7 @@ static char current_log_buf[FN_REFLEN]= "";
 static char last_error_buf[512]= "";
 
 // SHOW STATUS LIKE 'server_audit%';
-static struct SHOW_VAR audit_status[]=
+static SHOW_VAR audit_status[]=
 {
   {"server_audit_active", (char *)&is_active, SHOW_BOOL, SHOW_SCOPE_GLOBAL},
   {"server_audit_current_log", current_log_buf, SHOW_CHAR, SHOW_SCOPE_GLOBAL},
@@ -445,18 +454,26 @@ static struct SHOW_VAR audit_status[]=
 
 #ifdef HAVE_PSI_INTERFACE
 static PSI_mutex_key key_LOCK_operations;
+#ifndef FLOGGER_NO_PSI
+static PSI_mutex_key key_LOCK_atomic;
+static PSI_mutex_key key_LOCK_bigbuffer;
 static PSI_mutex_info mutex_key_list[]=
 {
   { &key_LOCK_operations, "SERVER_AUDIT_plugin::lock_operations",
-    PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
-#ifndef FLOGGER_NO_PSI
-  ,
+    PSI_FLAG_GLOBAL},
   { &key_LOCK_atomic, "SERVER_AUDIT_plugin::lock_atomic",
-    PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+    PSI_FLAG_GLOBAL},
   { &key_LOCK_bigbuffer, "SERVER_AUDIT_plugin::lock_bigbuffer",
-    PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
-#endif /*FLOGGER_NO_PSI*/
+    PSI_FLAG_GLOBAL}
+#else
+static PSI_mutex_info mutex_key_list[]=
+{
+  { &key_LOCK_operations, "SERVER_AUDIT_plugin::lock_operations",
+    PSI_FLAG_GLOBAL}
+#endif // FLOGGER_NO_PSI
 };
+
+
 #endif /*HAVE_PSI_INTERFACE*/
 static mysql_prlock_t lock_operations;
 static mysql_mutex_t lock_atomic;
@@ -479,7 +496,7 @@ static mysql_mutex_t lock_bigbuffer;
 
 
 static const char *getkey_user(const char *entry, size_t *length,
-                          my_bool nu __attribute__((unused)) )
+                          bool nu __attribute__((unused)) )
 {
   const char *e= entry;
   while (*e && *e != ' ' && *e != ',')
@@ -748,12 +765,8 @@ struct sa_keyword keywords_to_skip[]=
 
 struct sa_keyword not_ddl_keywords[]=
 {
-  {4, "DROP", &function_word, SA_SQLCOM_QUERY_ADMIN},
-  {4, "DROP", &procedure_word, SA_SQLCOM_QUERY_ADMIN},
   {4, "DROP", &user_word, SA_SQLCOM_DCL},
   {6, "CREATE", &user_word, SA_SQLCOM_DCL},
-  {6, "CREATE", &function_word, SA_SQLCOM_QUERY_ADMIN},
-  {6, "CREATE", &procedure_word, SA_SQLCOM_QUERY_ADMIN},
   {6, "RENAME", &user_word, SA_SQLCOM_DCL},
   {0, NULL, 0, SA_SQLCOM_DDL}
 };
@@ -965,11 +978,10 @@ static int start_logging()
   }
   else if (output_type == OUTPUT_SYSLOG)
   {
-    openlog(syslog_ident, LOG_NOWAIT, syslog_facility_codes[syslog_facility]);
+    openlog(syslog_ident, LOG_NOWAIT, syslog_facility_codes[sa_syslog_facility]);
     error_header();
     fprintf(stderr, "logging started to the syslog.\n");
     strncpy(current_log_buf, "[SYSLOG]", sizeof(current_log_buf)-1);
-    static_assert(sizeof current_log_buf > sizeof "[SYSLOG]", "Wrong log size");
   }
   is_active= 1;
   return 0;
@@ -1176,7 +1188,7 @@ static int write_log(const char *message, size_t len, int take_lock)
   {
     if (logfile)
     {
-      my_bool allow_rotate= !take_lock; /* Allow rotate if caller write lock */
+      bool allow_rotate= !take_lock; /* Allow rotate if caller write lock */
       if (take_lock && logger_time_to_rotate(logfile))
       {
         /* We have to rotate the log, change above read lock to write lock */
@@ -1194,7 +1206,7 @@ static int write_log(const char *message, size_t len, int take_lock)
   }
   else if (output_type == OUTPUT_SYSLOG)
   {
-    syslog(syslog_facility_codes[syslog_facility] |
+    syslog(syslog_facility_codes[sa_syslog_facility] |
            syslog_priority_codes[syslog_priority],
            "%s %.*s", syslog_info, (int) len, message);
   }
@@ -1951,42 +1963,6 @@ exit_func:
   return 0;
 }
 
-
-int get_db_mysql57(MYSQL_THD thd, char **name, size_t *len)
-{
-#ifdef __linux__
-  int db_off;
-  int db_len_off;
-  if (debug_server_started)
-  {
-#ifdef __x86_64__
-    db_off= 608;
-    db_len_off= 616;
-#else
-    db_off= 0;
-    db_len_off= 0;
-#endif /*x86_64*/
-  }
-  else
-  {
-#ifdef __x86_64__
-    db_off= 536;
-    db_len_off= 544;
-#else
-    db_off= 0;
-    db_len_off= 0;
-#endif /*x86_64*/
-  }
-
-  *name= *(char **) (((char *) thd) + db_off);
-  *len= *((size_t *) (((char*) thd) + db_len_off));
-  if (*name && (*name)[*len] != 0)
-    return 1;
-  return 0;
-#else
-  return 1;
-#endif
-}
 /*
    As it's just too difficult to #include "sql_class.h",
    let's just copy the necessary part of the system_variables
@@ -2055,9 +2031,9 @@ typedef struct loc_system_variables
   ulong log_slow_rate_limit;
   ulong binlog_format; ///< binlog format for this thd (see enum_binlog_format)
   ulong progress_report_time;
-  my_bool binlog_annotate_row_events;
-  my_bool binlog_direct_non_trans_update;
-  my_bool sql_log_bin;
+  bool binlog_annotate_row_events;
+  bool binlog_direct_non_trans_update;
+  bool sql_log_bin;
   ulong completion_type;
   ulong query_cache_type;
 } LOC_SV;
@@ -2076,7 +2052,6 @@ static void* find_sym(const char *sym)
 
 static int server_audit_init(void *p __attribute__((unused)))
 {
-  sql_print_information("Initializing audit plugin.....");
   if (!serv_ver)
   {
     serv_ver= (const char*)find_sym("server_version");
@@ -2171,11 +2146,11 @@ static int server_audit_deinit(void *p __attribute__((unused)))
 
 
 static void rotate_log(MYSQL_THD thd  __attribute__((unused)),
-                       struct SYS_VAR *var  __attribute__((unused)),
+                       SYS_VAR *var  __attribute__((unused)),
                        void *var_ptr  __attribute__((unused)),
                        const void *save  __attribute__((unused)))
 {
-  if (output_type == OUTPUT_FILE && logfile && *reinterpret_cast<const bool*>(save))
+  if (output_type == OUTPUT_FILE && logfile && *(my_bool*) save)
     (void) logger_rotate(logfile);
 }
 
@@ -2185,7 +2160,7 @@ static struct st_mysql_audit mysql_descriptor =
   NULL,                                                         /* release_thd function */
   auditing,                                                     /* notify function      */
   { MYSQL_AUDIT_GENERAL_ALL, MYSQL_AUDIT_CONNECTION_ALL, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }    /* class mask           */
+    0, 0, 0, 0, 0, 0, 0, 0}                                     /* class mask           */
 };
 
 
@@ -2198,7 +2173,6 @@ mysql_declare_plugin(server_audit)
   "Audit the server activity",                    /* description                    */
   PLUGIN_LICENSE_GPL,
   server_audit_init,                              /* init function (when loaded)    */
-  NULL,                                           /* check uninstall function       */
   server_audit_deinit,                            /* deinit function (when unloaded)*/
   PLUGIN_VERSION,                                 /* version                        */
   audit_status,                                   /* status variables               */
@@ -2233,7 +2207,7 @@ static void log_current_query(MYSQL_THD thd)
 
 
 static void update_file_path(MYSQL_THD thd,
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
    const char *new_name= (*(const char * const*)(save)) ? *(const char * const*)(save) : empty_str;
@@ -2279,7 +2253,7 @@ exit_func:
 
 
 static void update_file_rotations(MYSQL_THD thd  __attribute__((unused)),
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   rotations= *(const unsigned int *) save;
@@ -2296,7 +2270,7 @@ static void update_file_rotations(MYSQL_THD thd  __attribute__((unused)),
 
 
 static void update_file_rotate_size(MYSQL_THD thd  __attribute__((unused)),
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   file_rotate_size= *(const unsigned long long *) save;
@@ -2333,14 +2307,14 @@ static int check_users(void *save, struct st_mysql_value *value,
 }
 
 static int check_incl_users(MYSQL_THD thd  __attribute__((unused)),
-                            struct SYS_VAR *var  __attribute__((unused)),
+                            SYS_VAR *var  __attribute__((unused)),
                             void *save, struct st_mysql_value *value)
 {
   return check_users(save, value, sizeof(incl_user_buffer), "incl");
 }
 
 static int check_excl_users(MYSQL_THD thd  __attribute__((unused)),
-                            struct SYS_VAR *var  __attribute__((unused)),
+                            SYS_VAR *var  __attribute__((unused)),
                             void *save, struct st_mysql_value *value)
 {
   return check_users(save, value, sizeof(excl_user_buffer), "excl");
@@ -2348,7 +2322,7 @@ static int check_excl_users(MYSQL_THD thd  __attribute__((unused)),
 
 
 static void update_incl_users(MYSQL_THD thd,
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   const char *new_users= (*(const char * const*)(save)) ? *(const char * const*)(save) : empty_str;
@@ -2371,7 +2345,7 @@ static void update_incl_users(MYSQL_THD thd,
 
 
 static void update_excl_users(MYSQL_THD thd  __attribute__((unused)),
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   const char *new_users= (*(const char * const*)(save)) ? *(const char * const*)(save) : empty_str;
@@ -2394,7 +2368,7 @@ static void update_excl_users(MYSQL_THD thd  __attribute__((unused)),
 
 
 static void update_output_type(MYSQL_THD thd,
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   ulong new_output_type= *((const ulong *) save);
@@ -2422,24 +2396,24 @@ static void update_output_type(MYSQL_THD thd,
 
 
 static void update_syslog_facility(MYSQL_THD thd  __attribute__((unused)),
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   ulong new_facility= *((const ulong *) save);
-  if (syslog_facility == new_facility)
+  if (sa_syslog_facility == new_facility)
     return;
 
   mark_always_logged(thd);
   error_header();
   fprintf(stderr, "SysLog facility was changed from '%s' to '%s'.\n",
-          syslog_facility_names[syslog_facility],
+          syslog_facility_names[sa_syslog_facility],
           syslog_facility_names[new_facility]);
-  syslog_facility= new_facility;
+  sa_syslog_facility= new_facility;
 }
 
 
 static void update_syslog_priority(MYSQL_THD thd  __attribute__((unused)),
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   ulong new_priority= *((const ulong *) save);
@@ -2457,10 +2431,10 @@ static void update_syslog_priority(MYSQL_THD thd  __attribute__((unused)),
 }
 
 static void update_logging(MYSQL_THD thd,
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
-  bool new_logging_enabled = *(const bool *) save;
+  char new_logging_enabled = *(char *) save;
   if (new_logging_enabled == logging)
     return;
 
@@ -2488,7 +2462,7 @@ static void update_logging(MYSQL_THD thd,
 }
 
 static void update_syslog_ident(MYSQL_THD thd  __attribute__((unused)),
-              struct SYS_VAR *var  __attribute__((unused)),
+              SYS_VAR *var  __attribute__((unused)),
               void *var_ptr  __attribute__((unused)), const void *save)
 {
   const char *new_ident= (*(const char * const*)(save)) ? *(const char * const*)(save) : empty_str;

@@ -27,7 +27,7 @@ with MySQL 5.7 and 8.0](https://aws.amazon.com/about-aws/whats-new/2021/06/amazo
 This version maintains the functionality of the original audit plugin where
 possible, but adapts the plugin to use the MySQL 8.0 plugin API.
 
-To view the MySQL 5.7 compatible version, see the branch `mysql-5.7` in this
+To view the MySQL 8.0 compatible version, see the branch `mysql-8.0` in this
 repository.
 
 ## Compilation

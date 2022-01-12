@@ -16,20 +16,17 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335 USA */
 
+
 #ifndef FLOGGER_SKIP_INCLUDES
 #include <my_sys.h>
 #include <m_string.h>
-#include <my_thread.h>
-#include <my_config.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include "mysql/components/services/psi_mutex_bits.h"
-#include "my_io.h"
-#include "sql/mysqld.h"
-#include "my_thread_local.h"
 #include "mysql/service_mysql_alloc.h"
-#include "mysql/psi/mysql_mutex.h"
 #include "service_logger.h"
+
+#include "mysqld.h"
+#include "mysql/psi/psi.h"
+#include <mysql/psi/mysql_thread.h>
+
 #endif /*FLOGGER_SKIP_INCLUDES*/
 
 #undef flogger_mutex_init
@@ -38,28 +35,18 @@
 #undef flogger_mutex_unlock
 #undef mysql_mutex_real_mutex
 
-#define mysql_mutex_real_mutex(A) &(A)->lock.m_mutex.m_u.m_native
-
-#define flogger_mutex_init(A, B, C) pthread_mutex_init(mysql_mutex_real_mutex(B), C)
-
-#define flogger_mutex_destroy(A) pthread_mutex_destroy(mysql_mutex_real_mutex(A))
-
-#define flogger_mutex_lock(A) pthread_mutex_lock(mysql_mutex_real_mutex(A))
-
-#define flogger_mutex_unlock(A) pthread_mutex_unlock(mysql_mutex_real_mutex(A))
+#define mysql_mutex_real_mutex(A) &(A)->lock
+#define flogger_mutex_init(A,B,C) mysql_mutex_init(A,mysql_mutex_real_mutex(B),C)
+#define flogger_mutex_destroy(A) mysql_mutex_destroy(mysql_mutex_real_mutex(A))
+#define flogger_mutex_lock(A) mysql_mutex_lock(mysql_mutex_real_mutex(A))
+#define flogger_mutex_unlock(A) mysql_mutex_unlock(mysql_mutex_real_mutex(A))
+/*flogger_mutex_init*/
 
 #ifdef HAVE_PSI_INTERFACE
 /* These belong to the service initialization */
-static PSI_memory_key key_memory_server_audit_logger_handle;
 static PSI_mutex_key key_LOCK_logger_service;
-
-static PSI_mutex_info mutex_list[] = {
-  {&key_LOCK_logger_service, "logger_handle_st::lock",
-   PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
-};
-
-#else
-#define key_memory_server_audit_logger_handle PSI_NOT_INSTRUMENTED
+static PSI_mutex_info mutex_list[]=
+{{ &key_LOCK_logger_service, "logger_service_file_st::lock", PSI_FLAG_GLOBAL}};
 #endif
 
 #define LOG_FLAGS (O_APPEND | O_CREAT | O_WRONLY)
@@ -102,7 +89,7 @@ LOGGER_HANDLE *logger_open(const char *path,
     return 0;
   }
 
-  if (!(l_perm= (LOGGER_HANDLE *) my_malloc(key_memory_server_audit_logger_handle, sizeof(LOGGER_HANDLE), MYF(0))))
+  if (!(l_perm= (LOGGER_HANDLE *) my_malloc(PSI_NOT_INSTRUMENTED, sizeof(LOGGER_HANDLE), MYF(0))))
   {
     my_close(new_log.file, MYF(0));
     new_log.file= -1;

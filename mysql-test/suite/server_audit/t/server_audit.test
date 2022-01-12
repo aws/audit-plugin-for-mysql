@@ -1,4 +1,4 @@
---source include/have_plugin_auth.inc
+#--source include/have_plugin_auth.inc
 
 if (!`select count(*) FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME='server_audit'`) {
   skip No SERVER_AUDIT plugin;
@@ -89,12 +89,11 @@ connection default;
 create database sa_db;
 use sa_db;
 CREATE USER u1_empty IDENTIFIED BY 'pwd-123';
---error 1064
 GRANT ALL ON sa_db TO u2_empty IDENTIFIED BY "pwd-321";
-SET PASSWORD FOR u1_empty = 'pwd 098';
+SET PASSWORD FOR u1_empty = PASSWORD('pwd 098');
 CREATE USER u3_empty IDENTIFIED BY '';
 ALTER USER u3_empty IDENTIFIED BY 'pwd-456';
-drop user u1_empty, u3_empty;
+drop user u1_empty, u2_empty, u3_empty;
 
 set global server_audit_events='query_ddl';
 create table t1_ddl(id int);
@@ -105,6 +104,12 @@ select 2;
 /*! select 2*/;
 /*comment*/ select 2;
 drop table t1_ddl;
+
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
+
 set global server_audit_events='query_ddl,query_dml';
 create table t1_ddl_dml(id int);
 insert into t1_ddl_dml values (1), (2);
@@ -125,15 +130,14 @@ create table t1_dcl(id int);
 insert into t1_dcl values (1), (2);
 select * from t1_dcl;
 CREATE USER u1_dcl IDENTIFIED BY 'pwd-123';
---error 1064
 GRANT ALL ON sa_db TO u2_dcl IDENTIFIED BY "pwd-321";
 SET PASSWORD
 # comment
-FOR u1_dcl = 'pwd 098';
+FOR u1_dcl = PASSWORD('pwd 098');
 --error 1064
 SET PASSWORD FOR u1=<secret>;
 CREATE USER u3_dcl IDENTIFIED BY '';
-drop user u1_dcl, u3_dcl;
+drop user u1_dcl, u2_dcl, u3_dcl;
 select 2;
 (select 2);
 /*! select 2*/;
@@ -145,9 +149,18 @@ insert into t1_no_select values (1), (2);
 select * from t1_no_select;
 select 2;
 drop table t1_no_select;
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
+
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
 
 set global server_audit_events='';
-set global server_audit_incl_users='user1';
+set global server_audit_incl_users='user1_empty';
 
 create user user1_empty@localhost;
 grant all on sa_db.* to user1_empty@localhost;
@@ -156,8 +169,9 @@ connect (cn1,localhost,user1_empty,,sa_db);
 connection cn1;
 
 create table t1_empty(id int) engine=myisam;
-insert into t1_empty values (1);
+insert delayed into t1_empty values (1);
 connection default;
+--echo # Waiting until INSERT DELAYED thread does the insert.
 let $wait_condition= SELECT COUNT(*) = 1 FROM t1_empty;
 --source include/wait_condition.inc
 drop table t1_empty;
@@ -171,26 +185,28 @@ source include/wait_until_count_sessions.inc;
 
 drop user user1_empty@localhost;
 
+set global server_audit_events='';
 set global server_audit_incl_users='root, plug_dest';
 
-CREATE USER plug IDENTIFIED WITH 'test_plugin_server' AS 'plug_dest';
-CREATE USER plug_dest IDENTIFIED BY 'plug_dest_passwd';
---sleep 2
---replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
---error ER_ACCESS_DENIED_ERROR
-connect(plug_con,localhost,plug,plug_dest);
---sleep 2
-GRANT PROXY ON plug_dest TO plug;
---sleep 2
-connect(plug_con,localhost,plug,plug_dest);
-connection plug_con;
-select USER(),CURRENT_USER();
-connection default;
-disconnect plug_con;
---sleep 2
---sleep 2
-DROP USER plug;
-DROP USER plug_dest;
+# Due to build limitation, auth plugin cannot be installed.
+# CREATE USER plug IDENTIFIED WITH 'test_plugin_server' AS 'plug_dest';
+# CREATE USER plug_dest IDENTIFIED BY 'plug_dest_passwd';
+# --sleep 2
+# --replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
+# --error ER_ACCESS_DENIED_ERROR : this should fail : no grant
+# connect(plug_con,localhost,plug,plug_dest);
+# --sleep 2
+# GRANT PROXY ON plug_dest TO plug;
+# --sleep 2
+# connect(plug_con,localhost,plug,plug_dest);
+# connection plug_con;
+# select USER(),CURRENT_USER();
+# connection default;
+# disconnect plug_con;
+# --sleep 2
+# --sleep 2
+# DROP USER plug;
+# DROP USER plug_dest;
 
 set global server_audit_query_log_limit= 15;
 select (1), (2), (3), (4);
