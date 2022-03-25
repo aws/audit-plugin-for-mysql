@@ -1962,6 +1962,9 @@ int get_db_mysql57(MYSQL_THD thd, char **name, size_t *len)
 #ifdef __x86_64__
     db_off= 608;
     db_len_off= 616;
+#elif __aarch64__
+    db_off= 632;
+    db_len_off= 640;
 #else
     db_off= 0;
     db_len_off= 0;
@@ -1972,6 +1975,9 @@ int get_db_mysql57(MYSQL_THD thd, char **name, size_t *len)
 #ifdef __x86_64__
     db_off= 536;
     db_len_off= 544;
+#elif __aarch64__
+    db_off= 552;
+    db_len_off= 560;
 #else
     db_off= 0;
     db_len_off= 0;
