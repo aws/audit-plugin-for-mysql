@@ -30,10 +30,25 @@ possible, but adapts the plugin to use the MySQL 8.0 plugin API.
 To view the MySQL 5.7 compatible version, see the branch `mysql-5.7` in this
 repository.
 
+## Compatibility
+
+This plugin has been tested and verified on *Amazon Linux OS*
+https://aws.amazon.com/amazon-linux-2. It has not been tested on other operating
+systems and does not support Windows OS.
+
 ## Compilation
 
-Copy the contents of this repository on top of the sources or MySQL so it
-compiles as part of the MySQL build.
+Copy the plugin source code on top of the sources of MySQL using the following
+command so it compiles as part of the MySQL build:
+
+```
+rsync -av plugin/ <mysqlSourceFolder>/plugin/
+```
+
+mysql-test is optional unless you want to run MTR tests:
+```
+rsync -av mysql-test/ <mysqlSourceFolder>/mysql-test/
+```
 
 ## Installation
 

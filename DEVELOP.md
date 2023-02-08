@@ -38,27 +38,9 @@ the tests accordingly.
 MySQL 8.0 to test audit plugin functionality with a single thread.
 
 ## Running test suite with mysql-test-run
-
-### Register test
-
-To register the audit plugin MTR test, add the following line to `/mysql-test/include/plugin.defs`:
-
-    server_audit    plugin_output_directory   no SERVER_AUDIT   server_audit
-
-### Load plugin
-
-To test the plugin, either install the plugin when executing the MTR test
-or [pre-load the
-plugin](https://dev.mysql.com/doc/refman/8.0/en/plugin-loading.html#server-plugin-installing-command-line)
-before the MTR starts.
-
-Server audit plugin test requires `test_plugin_server` to test the proxy
-use case. The test plugin `test_plugin_server` must be installed during the server start
-up, otherwise the proxy test case will fail.
-
-The [test case
-options](https://dev.mysql.com/doc/dev/mysql-server/latest/PAGE_TESTCASE_SPECIFIC_SERVER_OPTIONS.html)
-file `server_audit-master.opt` exists to facilitate this.
+```
+./mysql-test-run --suite=server_audit
+```
 
 ## Updating tests
 
