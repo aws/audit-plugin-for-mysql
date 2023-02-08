@@ -1,3 +1,2 @@
 --thread_handling='one-thread-per-connection'
-$SERVER_AUDIT_OPT
-$SERVER_AUDIT_LOAD_ADD
+--plugin_dir=$MYSQL_BINDIR/plugin/server_audit
