@@ -23,7 +23,7 @@
 #include <my_config.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include "mysql/components/services/psi_mutex_bits.h"
+#include "mysql/components/services/bits/psi_bits.h"
 #include "my_io.h"
 #include "sql/mysqld.h"
 #include "my_thread_local.h"
