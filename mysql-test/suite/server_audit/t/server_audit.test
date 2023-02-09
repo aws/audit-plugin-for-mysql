@@ -1,16 +1,42 @@
+--echo
+--echo =======================================================================
+--echo Test of server audit plugin
+--echo =======================================================================
+
+
+--echo
+--echo =======================================================================
+--echo Install the audit plugin and auth test plugin
+--echo =======================================================================
+--replace_regex /\.dll/.so/
+eval INSTALL PLUGIN test_plugin_server SONAME 'auth_test_plugin.$PLUGIN_SUFFIX';
+--replace_regex /\.dll/.so/
+eval INSTALL PLUGIN server_audit SONAME 'server_audit.$PLUGIN_SUFFIX';
+
 --source include/have_plugin_auth.inc
 
 if (!`select count(*) FROM INFORMATION_SCHEMA.PLUGINS WHERE PLUGIN_NAME='server_audit'`) {
   skip No SERVER_AUDIT plugin;
 }
 
-# An unfortunate wait for check-testcase.test to complete disconnect.
+--echo
+--echo =======================================================================
+--echo An unfortunate wait for check-testcase.test to complete disconnect
+--echo =======================================================================
 let count_sessions= 1;
 source include/wait_until_count_sessions.inc;
 
+--echo
+--echo =======================================================================
+--echo Audit log file
+--echo =======================================================================
 let $MYSQLD_DATADIR= `SELECT @@datadir`;
 let SEARCH_FILE= $MYSQLD_DATADIR/server_audit.log;
 
+--echo
+--echo =======================================================================
+--echo Initialize server audit variables
+--echo =======================================================================
 show variables like 'server_audit%';
 set global server_audit_file_path=null;
 set global server_audit_incl_users=null;
@@ -18,11 +44,15 @@ set global server_audit_file_path='server_audit.log';
 set global server_audit_output_type=file;
 set global server_audit_logging=on;
 
+--echo
+--echo =======================================================================
+--echo Generate audit log and test with invalid parameter values
+--echo =======================================================================
 --error ER_WRONG_VALUE_FOR_VAR
-set global server_audit_incl_users= repeat("'root',", 10000);
+set global server_audit_incl_users= repeat("'user',", 10000);
 show variables like 'server_audit_incl_users';
 --error ER_WRONG_VALUE_FOR_VAR
-set global server_audit_excl_users= repeat("'root',", 10000);
+set global server_audit_excl_users= repeat("'user',", 10000);
 show variables like 'server_audit_excl_users';
 let SEARCH_COUNT= 5;
 source include/wait_for_line_count_in_file.inc;
@@ -32,12 +62,20 @@ disconnect con1;
 let SEARCH_COUNT= 7;
 source include/wait_for_line_count_in_file.inc;
 
+--echo
+--echo =======================================================================
+--echo Generate audit log by connecting using non-existing user
+--echo =======================================================================
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --error ER_ACCESS_DENIED_ERROR
 connect (con1,localhost,no_such_user,,mysql);
 let SEARCH_COUNT= 8;
 source include/wait_for_line_count_in_file.inc;
 
+--echo
+--echo =======================================================================
+--echo Generate audit log with different parameter values and queries
+--echo =======================================================================
 connection default;
 set global server_audit_incl_users='odin, dva, tri';
 create table t1_default (id int);
@@ -59,6 +97,8 @@ select 1,
 insert into t2_default values (1), (2);
 select * from t2_default;
 --disable_ps_protocol
+--echo
+--echo Test with different parameter values and queries
 --error ER_NO_SUCH_TABLE
 select * from t_doesnt_exist;
 --enable_ps_protocol
@@ -85,6 +125,10 @@ disconnect con1;
 let SEARCH_COUNT= 39;
 source include/wait_for_line_count_in_file.inc;
 
+--echo
+--echo =======================================================================
+--echo Generate audit log by creating user and grants
+--echo =======================================================================
 connection default;
 create database sa_db;
 use sa_db;
@@ -96,6 +140,10 @@ CREATE USER u3_empty IDENTIFIED BY '';
 ALTER USER u3_empty IDENTIFIED BY 'pwd-456';
 drop user u1_empty, u3_empty;
 
+--echo
+--echo =======================================================================
+--echo Generate audit log with different server_audit_events and queries
+--echo =======================================================================
 set global server_audit_events='query_ddl';
 create table t1_ddl(id int);
 insert into t1_ddl values (1), (2);
@@ -198,6 +246,10 @@ select 'A', 'B', 'C', 'D';
 set global server_audit_query_log_limit= 1024;
 drop database sa_db;
 
+--echo
+--echo =======================================================================
+--echo Check server_audit_current_log status
+--echo =======================================================================
 set global server_audit_file_path='.';
 --replace_regex /\.[\\\/]/HOME_DIR\//
 show status like 'server_audit_current_log';
@@ -209,9 +261,23 @@ show status like 'server_audit_current_log';
 set global server_audit_file_path='nonexisting_dir/';
 show status like 'server_audit_current_log';
 show variables like 'server_audit%';
-uninstall plugin server_audit;
 
-# replace the timestamp and the hostname with constant values
---replace_regex /[0-9]* [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\,[^,]*\,/TIME,HOSTNAME,/ /\,[1-9][0-9]*\,/,1,/ /\,[1-9][0-9]*/,ID/
-cat_file $MYSQLD_DATADIR/server_audit.log;
+--echo
+--echo =======================================================================
+--echo Uninstall plugins
+--echo =======================================================================
+uninstall plugin server_audit;
+uninstall plugin test_plugin_server;
+
+--echo
+--echo =======================================================================
+--echo Dump the audit logs, replace the timestamp and the hostname with constant values
+--echo =======================================================================
+--replace_regex /[0-9]* [0-9][0-9]:[0-9][0-9]:[0-9][0-9]\,[^,]*\,([^,]*)\,([^,]*)\,[0-9][0-9]*\,[0-9][0-9]*\,/TIME,HOSTNAME,\1,\2,CONNECTION_ID,QUERY_ID,/
+--exec cat $MYSQLD_DATADIR/server_audit.log;
+
+--echo
+--echo =======================================================================
+--echo Remove the temporary audit logs
+--echo =======================================================================
 remove_file $MYSQLD_DATADIR/server_audit.log;
