@@ -1184,7 +1184,8 @@ static int write_log(const char *message, size_t len, int take_lock)
         mysql_prlock_wrlock(&lock_operations);
         allow_rotate= 1;
       }
-      if (!(is_active= (logger_write_r(logfile, allow_rotate, message, len) ==
+      if (logfile &&
+	  !(is_active= (logger_write_r(logfile, allow_rotate, message, len) ==
                         (int) len)))
       {
         ++log_write_failures;
