@@ -67,7 +67,8 @@ source include/wait_for_line_count_in_file.inc;
 --echo Generate audit log by connecting using non-existing user
 --echo =======================================================================
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
---error ER_ACCESS_DENIED_ERROR, ER_ACCESS_DENIED_NO_PROXY_GRANT
+# 6126 is the error code for ER_ACCESS_DENIED_NO_PROXY_GRANT which is only support for 8.4 and later.
+--error ER_ACCESS_DENIED_ERROR, 6126 
 connect (con1,localhost,no_such_user,,mysql);
 let SEARCH_COUNT= 8;
 source include/wait_for_line_count_in_file.inc;
@@ -225,7 +226,8 @@ CREATE USER plug IDENTIFIED WITH 'test_plugin_server' AS 'plug_dest';
 CREATE USER plug_dest IDENTIFIED BY 'plug_dest_passwd';
 --sleep 2
 --replace_result $MASTER_MYPORT MYSQL_PORT $MASTER_MYSOCK MYSQL_SOCK
---error ER_ACCESS_DENIED_ERROR, ER_ACCESS_DENIED_NO_PROXY_GRANT
+# 6126 is the error code for ER_ACCESS_DENIED_NO_PROXY_GRANT which is only support for 8.4 and later.
+--error ER_ACCESS_DENIED_ERROR, 6126
 connect(plug_con,localhost,plug,plug_dest);
 --sleep 2
 GRANT PROXY ON plug_dest TO plug;
