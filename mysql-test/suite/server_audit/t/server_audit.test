@@ -211,9 +211,18 @@ let $wait_condition= SELECT COUNT(*) = 1 FROM t1_empty;
 --source include/wait_condition.inc
 drop table t1_empty;
 
+# This part of the test appears to be very timing-sensitive,
+# particularly with respect to audit records relating to
+# `--connect` and `--disconnect`.
+#
+# The delays (`--sleep`) have been added to try to ensure
+# a stable ordering of the output from "Dump the audit logs"
+# at the end of the test.
+
 set global server_audit_logging= off;
 set global server_audit_incl_users='root';
 set global server_audit_logging= on;
+--sleep 2
 disconnect cn1;
 let $count_sessions=1;
 source include/wait_until_count_sessions.inc;
