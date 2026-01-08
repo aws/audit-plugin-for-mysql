@@ -150,6 +150,43 @@ Warning	1287	'SET PASSWORD FOR <user> = PASSWORD('<plaintext_password>')' is dep
 CREATE USER u3_empty IDENTIFIED BY '';
 ALTER USER u3_empty IDENTIFIED BY 'pwd-456';
 drop user u1_empty, u2_empty, u3_empty;
+
+=======================================================================
+Test password obfuscation in audit log
+=======================================================================
+# Test GRANT with IDENTIFIED BY
+GRANT SELECT ON sa_db.* TO pwd_test1 IDENTIFIED BY 'grantpwd789';
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+# Test GRANT with IDENTIFIED BY with syntax error (audit plugin password obfuscation should apply here)
+GRANT SELECT ON sa_db.* TO pwd_test1 IDENTIFIED BY a 'grantpwd789';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'a 'grantpwd789'' at line 1
+# Test CREATE USER with password
+CREATE USER pwd_test2 IDENTIFIED BY 'secret123';
+# Test ALTER USER with password
+ALTER USER pwd_test2 IDENTIFIED BY 'newsecret456';
+# Test ALTER USER with syntax error (audit plugin password obfuscation should apply here)
+ALTER USER pwd_test2 IDENTIFIED BY a 'newsecret456';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'a 'newsecret456'' at line 1
+# Test CHANGE MASTER with MASTER_PASSWORD
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_USER='repl', MASTER_PASSWORD='replsecret';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+# Test CREATE SERVER with PASSWORD
+CREATE SERVER pwd_server FOREIGN DATA WRAPPER mysql OPTIONS (HOST 'localhost', USER 'remote', PASSWORD 'serverpwd');
+# Test ALTER SERVER with PASSWORD
+ALTER SERVER pwd_server OPTIONS (PASSWORD 'newserverpwd');
+# Test SET PASSWORD
+SET PASSWORD FOR pwd_test2 = 'anothersecret';
+SET PASSWORD FOR pwd_test2 = PASSWORD('anothersecret');
+Warnings:
+Warning	1287	'SET PASSWORD FOR <user> = PASSWORD('<plaintext_password>')' is deprecated and will be removed in a future release. Please use SET PASSWORD FOR <user> = '<plaintext_password>' instead
+# Cleanup
+DROP USER pwd_test1, pwd_test2;
+DROP SERVER pwd_server;
+RESET SLAVE ALL;
+
 =======================================================================
 Generate audit log with different server_audit_events and queries
 =======================================================================
@@ -382,6 +419,22 @@ TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SHOW WARNINGS',
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'u3_empty\'@\'%\' IDENTIFIED WITH \'mysql_native_password\'',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'ALTER USER \'u3_empty\'@\'%\' IDENTIFIED WITH \'mysql_native_password\' AS \'*E92C6EAB2CCEEA98BE5CD32D124A8CAD22E17E0D\'',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop user u1_empty, u2_empty, u3_empty',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'GRANT SELECT ON `sa_db`.* TO \'pwd_test1\'@\'%\' IDENTIFIED WITH \'mysql_native_password\' AS \'*521EF6D53865FC49453A8ABA34FED24ABBF7DC55\'',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SHOW WARNINGS',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'GRANT SELECT ON sa_db.* TO pwd_test1 IDENTIFIED BY a *****',1064,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'pwd_test2\'@\'%\' IDENTIFIED WITH \'mysql_native_password\' AS \'*8C9B6F6F6387801FD5F1E6211872FDDB614099EC\'',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'ALTER USER \'pwd_test2\'@\'%\' IDENTIFIED WITH \'mysql_native_password\' AS \'*381D4152CCDED65F8CE1B8B59AC51451B12190CF\'',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'ALTER USER pwd_test2 IDENTIFIED BY a *****',1064,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CHANGE MASTER TO MASTER_HOST = \'127.0.0.1\' MASTER_USER = \'repl\' MASTER_PASSWORD = <secret>',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SHOW WARNINGS',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE SERVER pwd_server FOREIGN DATA WRAPPER \'mysql\' OPTIONS ( PASSWORD *****, USER \'remote\', HOST \'localhost\' )',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'ALTER SERVER pwd_server OPTIONS ( PASSWORD ***** )',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SET PASSWORD FOR `pwd_test2`@`%`=<secret>',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SET PASSWORD FOR `pwd_test2`@`%`=<secret>',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SHOW WARNINGS',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'DROP USER pwd_test1, pwd_test2',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'DROP SERVER pwd_server',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'RESET SLAVE ALL',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'create table t1_ddl(id int)',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop table t1_ddl',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'create procedure pr1() insert into test.t1 values ("foo", 42)',0,,
