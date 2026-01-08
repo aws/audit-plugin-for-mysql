@@ -143,6 +143,34 @@ drop user u1_empty, u3_empty;
 
 --echo
 --echo =======================================================================
+--echo Test password obfuscation in audit log
+--echo =======================================================================
+--echo # Test GRANT with IDENTIFIED BY syntax was removed in 8.0+ but password should still be hidden
+--error ER_PARSE_ERROR
+GRANT SELECT ON sa_db.* TO pwd_test1 IDENTIFIED BY 'grantpwd789';
+--echo # Test CREATE USER with password
+CREATE USER pwd_test2 IDENTIFIED BY 'secret123';
+--echo # Test ALTER USER with password
+ALTER USER pwd_test2 IDENTIFIED BY 'newsecret456';
+--echo # Test ALTER USER with syntax error (audit plugin password obfuscation should apply here)
+--error ER_PARSE_ERROR
+ALTER USER pwd_test2 IDENTIFIED BY a 'newsecret456';
+--echo # Test CHANGE REPLICATION SOURCE with SOURCE_PASSWORD
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_USER='repl', SOURCE_PASSWORD='replsecret';
+--echo # Test CREATE SERVER with PASSWORD
+CREATE SERVER pwd_server FOREIGN DATA WRAPPER mysql OPTIONS (HOST 'localhost', USER 'remote', PASSWORD 'serverpwd');
+--echo # Test ALTER SERVER with PASSWORD
+ALTER SERVER pwd_server OPTIONS (PASSWORD 'newserverpwd');
+--echo # Test SET PASSWORD
+SET PASSWORD FOR pwd_test2 = 'anothersecret';
+--echo # Cleanup
+DROP USER pwd_test2;
+DROP SERVER pwd_server;
+RESET REPLICA ALL;
+ 
+--echo
+--echo
+--echo =======================================================================
 --echo Generate audit log with different server_audit_events and queries
 --echo =======================================================================
 set global server_audit_events='query_ddl';
