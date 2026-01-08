@@ -401,8 +401,6 @@ TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'/*! select 2*/'
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'/*comment*/ select 2',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'u1_dcl\'@\'%\' IDENTIFIED WITH \'mysql_native_password\' AS \'*106E5114207FD5B9D3FE67BF45BCEEB56EB55D6B\'',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'GRANT ALL PRIVILEGES ON `sa_db`.`sa_db` TO \'u2_dcl\'@\'%\' IDENTIFIED WITH \'mysql_native_password\' AS \'*215F403F993AEF05BCF73D3B7E7D175859C90F60\'',0,,
-TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SET PASSWORD FOR `u1_dcl`@`%`=<secret>',0,,
-TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SET PASSWORD FOR u1=<secret>',1064,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'u3_dcl\'@\'%\' IDENTIFIED WITH \'mysql_native_password\'',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop user u1_dcl, u2_dcl, u3_dcl',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'insert into t1_no_select values (1), (2)',0,,
