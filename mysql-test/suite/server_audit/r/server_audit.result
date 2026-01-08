@@ -172,6 +172,10 @@ select 2;
 2
 2
 drop table t1_ddl;
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
 set global server_audit_events='query_ddl,query_dml';
 create table t1_ddl_dml(id int);
 insert into t1_ddl_dml values (1), (2);
@@ -244,6 +248,10 @@ select 2;
 2
 2
 drop table t1_no_select;
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
 set global server_audit_events='';
 set global server_audit_incl_users='user1';
 create user user1_empty@localhost;
@@ -373,6 +381,10 @@ TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'ALTER USER \'u3
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop user u1_empty, u3_empty',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'create table t1_ddl(id int)',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop table t1_ddl',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'create procedure pr1() insert into test.t1 values ("foo", 42)',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'create function fn1(i int) returns int deterministic return i+1',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop procedure pr1',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop function fn1',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'create table t1_ddl_dml(id int)',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'insert into t1_ddl_dml values (1), (2)',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'select * from t1_ddl_dml',0,,
@@ -387,7 +399,6 @@ TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'/*comment*/ sel
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'u1_dcl\'@\'%\' IDENTIFIED BY <secret>',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'GRANT ALL ON sa_db TO u2_dcl IDENTIFIED BY *****',1064,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SET PASSWORD FOR `u1_dcl`@`%`=<secret>',0,,
-TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SET PASSWORD FOR u1=<secret>',1064,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'u3_dcl\'@\'%\' IDENTIFIED BY <secret>',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop user u1_dcl, u3_dcl',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'insert into t1_no_select values (1), (2)',0,,

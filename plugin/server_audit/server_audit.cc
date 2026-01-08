@@ -17,7 +17,7 @@
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335 USA */
 
 #define PLUGIN_VERSION 0x104
-#define PLUGIN_STR_VERSION "1.4.11"
+#define PLUGIN_STR_VERSION "1.4.13"
 
 #define _my_thread_var loc_thread_var
 
@@ -99,6 +99,7 @@ static void closelog() {}
 #include <typelib.h>
 #include <mysql/plugin.h>
 #include <mysql/plugin_audit.h>
+#include <my_sqlcommand.h>
 #include <string.h>
 #include "../../mysys/mysys_priv.h"
 #ifndef RTLD_DEFAULT
@@ -700,132 +701,6 @@ static int user_coll_fill(struct user_coll *c, char *users,
 
   return 0;
 }
-
-
-enum sa_keywords
-{
-  SA_SQLCOM_NOTHING=0,
-  SA_SQLCOM_DDL,
-  SA_SQLCOM_DML,
-  SA_SQLCOM_GRANT,
-  SA_SQLCOM_CREATE_USER,
-  SA_SQLCOM_ALTER_USER,
-  SA_SQLCOM_CHANGE_MASTER,
-  SA_SQLCOM_CREATE_SERVER,
-  SA_SQLCOM_SET_OPTION,
-  SA_SQLCOM_ALTER_SERVER,
-  SA_SQLCOM_TRUNCATE,
-  SA_SQLCOM_QUERY_ADMIN,
-  SA_SQLCOM_DCL,
-};
-
-struct sa_keyword
-{
-  int length;
-  const char *wd;
-  struct sa_keyword *next;
-  enum sa_keywords type;
-};
-
-
-struct sa_keyword xml_word=   {3, "XML", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword user_word=   {4, "USER", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword data_word=   {4, "DATA", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword server_word= {6, "SERVER", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword master_word= {6, "MASTER", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword password_word= {8, "PASSWORD", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword function_word= {8, "FUNCTION", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword statement_word= {9, "STATEMENT", 0, SA_SQLCOM_NOTHING};
-struct sa_keyword procedure_word= {9, "PROCEDURE", 0, SA_SQLCOM_NOTHING};
-
-
-struct sa_keyword keywords_to_skip[]=
-{
-  {3, "SET", &statement_word, SA_SQLCOM_QUERY_ADMIN},
-  {0, NULL, 0, SA_SQLCOM_DDL}
-};
-
-
-struct sa_keyword not_ddl_keywords[]=
-{
-  {4, "DROP", &function_word, SA_SQLCOM_QUERY_ADMIN},
-  {4, "DROP", &procedure_word, SA_SQLCOM_QUERY_ADMIN},
-  {4, "DROP", &user_word, SA_SQLCOM_DCL},
-  {6, "CREATE", &user_word, SA_SQLCOM_DCL},
-  {6, "CREATE", &function_word, SA_SQLCOM_QUERY_ADMIN},
-  {6, "CREATE", &procedure_word, SA_SQLCOM_QUERY_ADMIN},
-  {6, "RENAME", &user_word, SA_SQLCOM_DCL},
-  {0, NULL, 0, SA_SQLCOM_DDL}
-};
-
-
-struct sa_keyword ddl_keywords[]=
-{
-  {4, "DROP", 0, SA_SQLCOM_DDL},
-  {5, "ALTER", 0, SA_SQLCOM_DDL},
-  {6, "CREATE", 0, SA_SQLCOM_DDL},
-  {6, "RENAME", 0, SA_SQLCOM_DDL},
-  {8, "TRUNCATE", 0, SA_SQLCOM_DDL},
-  {0, NULL, 0, SA_SQLCOM_DDL}
-};
-
-
-struct sa_keyword dml_keywords[]=
-{
-  {2, "DO", 0, SA_SQLCOM_DML},
-  {4, "CALL", 0, SA_SQLCOM_DML},
-  {4, "LOAD", &data_word, SA_SQLCOM_DML},
-  {4, "LOAD", &xml_word, SA_SQLCOM_DML},
-  {6, "DELETE", 0, SA_SQLCOM_DML},
-  {6, "INSERT", 0, SA_SQLCOM_DML},
-  {6, "SELECT", 0, SA_SQLCOM_DML},
-  {6, "UPDATE", 0, SA_SQLCOM_DML},
-  {7, "HANDLER", 0, SA_SQLCOM_DML},
-  {7, "REPLACE", 0, SA_SQLCOM_DML},
-  {0, NULL, 0, SA_SQLCOM_DML}
-};
-
-
-struct sa_keyword dml_no_select_keywords[]=
-{
-  {2, "DO", 0, SA_SQLCOM_DML},
-  {4, "CALL", 0, SA_SQLCOM_DML},
-  {4, "LOAD", &data_word, SA_SQLCOM_DML},
-  {4, "LOAD", &xml_word, SA_SQLCOM_DML},
-  {6, "DELETE", 0, SA_SQLCOM_DML},
-  {6, "INSERT", 0, SA_SQLCOM_DML},
-  {6, "UPDATE", 0, SA_SQLCOM_DML},
-  {7, "HANDLER", 0, SA_SQLCOM_DML},
-  {7, "REPLACE", 0, SA_SQLCOM_DML},
-  {0, NULL, 0, SA_SQLCOM_DML}
-};
-
-
-struct sa_keyword dcl_keywords[]=
-{
-  {6, "CREATE", &user_word, SA_SQLCOM_DCL},
-  {4, "DROP", &user_word, SA_SQLCOM_DCL},
-  {6, "RENAME", &user_word, SA_SQLCOM_DCL},
-  {5, "GRANT", 0, SA_SQLCOM_DCL},
-  {6, "REVOKE", 0, SA_SQLCOM_DCL},
-  {3, "SET", &password_word, SA_SQLCOM_DCL},
-  {0, NULL, 0, SA_SQLCOM_DDL}
-};
-
-
-struct sa_keyword passwd_keywords[]=
-{
-  {3, "SET", &password_word, SA_SQLCOM_SET_OPTION},
-  {5, "ALTER", &server_word, SA_SQLCOM_ALTER_SERVER},
-  {5, "ALTER", &user_word, SA_SQLCOM_ALTER_USER},
-  {5, "GRANT", 0, SA_SQLCOM_GRANT},
-  {6, "CREATE", &user_word, SA_SQLCOM_CREATE_USER},
-  {6, "CREATE", &server_word, SA_SQLCOM_CREATE_SERVER},
-  {6, "CHANGE", &master_word, SA_SQLCOM_CHANGE_MASTER},
-  {0, NULL, 0, SA_SQLCOM_NOTHING}
-};
-
-#define MAX_KEYWORD 9
 
 
 static void error_header()
@@ -1467,99 +1342,83 @@ static int do_log_user(const char *name, int len,
   return result;
 }
 
-
-static int get_next_word(const char *query, char *word)
-{
-  int len= 0;
-  char c;
-  while ((c= query[len]))
+static unsigned int sql_command_to_cmdtype(int sql_command) {
+  switch (sql_command)
   {
-    if (c >= 'a' && c <= 'z')
-      word[len]= 'A' + (c-'a');
-    else if (c >= 'A' && c <= 'Z')
-      word[len]= c;
-    else
-      break;
+    case SQLCOM_ALTER_DB:
+    case SQLCOM_ALTER_EVENT:
+    case SQLCOM_ALTER_FUNCTION:
+    case SQLCOM_ALTER_INSTANCE:
+    case SQLCOM_ALTER_PROCEDURE:
+    case SQLCOM_ALTER_RESOURCE_GROUP:
+    case SQLCOM_ALTER_SERVER:
+    case SQLCOM_ALTER_TABLE:
+    case SQLCOM_ALTER_TABLESPACE:
+    case SQLCOM_CREATE_DB:
+    case SQLCOM_CREATE_EVENT:
+    case SQLCOM_CREATE_INDEX:
+    case SQLCOM_CREATE_PROCEDURE:
+    case SQLCOM_CREATE_RESOURCE_GROUP:
+    case SQLCOM_CREATE_SERVER:
+    case SQLCOM_CREATE_SPFUNCTION:
+    case SQLCOM_CREATE_SRS:
+    case SQLCOM_CREATE_TABLE:
+    case SQLCOM_CREATE_TRIGGER:
+    case SQLCOM_CREATE_VIEW:
+    case SQLCOM_DROP_DB:
+    case SQLCOM_DROP_EVENT:
+    case SQLCOM_DROP_FUNCTION:
+    case SQLCOM_DROP_INDEX:
+    case SQLCOM_DROP_PROCEDURE:
+    case SQLCOM_DROP_RESOURCE_GROUP:
+    case SQLCOM_DROP_SERVER:
+    case SQLCOM_DROP_SRS:
+    case SQLCOM_DROP_TABLE:
+    case SQLCOM_DROP_TRIGGER:
+    case SQLCOM_DROP_VIEW:
+    case SQLCOM_RENAME_TABLE:
+    case SQLCOM_TRUNCATE:
+      return EVENT_QUERY_DDL;
 
-    if (len++ == MAX_KEYWORD)
-      return 0;
+    case SQLCOM_DO:
+    case SQLCOM_CALL:
+    case SQLCOM_LOAD:
+    case SQLCOM_DELETE:
+    case SQLCOM_DELETE_MULTI:
+    case SQLCOM_INSERT:
+    case SQLCOM_INSERT_SELECT:
+    case SQLCOM_UPDATE:
+    case SQLCOM_UPDATE_MULTI:
+    case SQLCOM_HA_OPEN:
+    case SQLCOM_HA_READ:
+    case SQLCOM_HA_CLOSE:
+    case SQLCOM_REPLACE:
+    case SQLCOM_REPLACE_SELECT:
+      return EVENT_QUERY_DML | EVENT_QUERY_DML_NO_SELECT;
+
+    case SQLCOM_SELECT:
+      return EVENT_QUERY_DML;
+
+    case SQLCOM_CREATE_USER:
+    case SQLCOM_CREATE_ROLE:
+    case SQLCOM_DROP_ROLE:
+    case SQLCOM_DROP_USER:
+    case SQLCOM_RENAME_USER:
+    case SQLCOM_GRANT:
+    case SQLCOM_GRANT_ROLE:
+    case SQLCOM_REVOKE:
+    case SQLCOM_REVOKE_ROLE:
+    case SQLCOM_REVOKE_ALL:
+    case SQLCOM_SET_PASSWORD:
+      return EVENT_QUERY_DCL;
+
+    default:
+      return EVENT_QUERY_ALL;
   }
-  word[len]= 0;
-  return len;
 }
-
-
-static int filter_query_type(const char *query, struct sa_keyword *kwd)
-{
-  int qwe_in_list;
-  char fword[MAX_KEYWORD + 1], nword[MAX_KEYWORD + 1];
-  int len, nlen= 0;
-  const struct sa_keyword *l_keywords;
-
-  while (*query && (is_space(*query) || *query == '(' || *query == '/'))
-  {
-    /* comment handling */
-    if (*query == '/' && query[1] == '*')
-    {
-      if (query[2] == '!')
-      {
-        query+= 3;
-        while (*query >= '0' && *query <= '9')
-          query++;
-        continue;
-      }
-      query+= 2;
-      while (*query)
-      {
-        if (*query=='*' && query[1] == '/')
-        {
-          query+= 2;
-          break;
-        }
-        query++;
-      }
-      continue;
-    }
-    query++;
-  }
-
-  qwe_in_list= 0;
-  if (!(len= get_next_word(query, fword)))
-    goto not_in_list;
-  query+= len+1;
-
-  l_keywords= kwd;
-  while (l_keywords->length)
-  {
-    if (l_keywords->length == len && strncmp(l_keywords->wd, fword, len) == 0)
-    {
-      if (l_keywords->next)
-      {
-        if (nlen == 0)
-        {
-          while (*query && is_space(*query))
-            query++;
-          nlen= get_next_word(query, nword);
-        }
-        if (l_keywords->next->length != nlen ||
-            strncmp(l_keywords->next->wd, nword, nlen) != 0)
-          goto do_loop;
-      }
-
-      qwe_in_list= l_keywords->type;
-      break;
-    };
-do_loop:
-    l_keywords++;
-  }
-
-not_in_list:
-  return qwe_in_list;
-}
-
 
 static int log_statement_ex(const struct connection_info *cn,
-                            time_t ev_time, unsigned long thd_id,
+                            time_t ev_time, unsigned long thd_id, int sql_cmd,
                             const char *query, unsigned int query_len,
                             int error_code, const char *type, int take_lock)
 {
@@ -1573,6 +1432,7 @@ static int log_statement_ex(const struct connection_info *cn,
   unsigned int db_length;
   long long query_id;
   int result;
+  unsigned int cmdtype= sql_command_to_cmdtype(sql_cmd);
 
   if ((db= cn->db))
     db_length= cn->db_length;
@@ -1597,49 +1457,8 @@ static int log_statement_ex(const struct connection_info *cn,
   if (query && !(events & EVENT_QUERY_ALL) &&
       (events & EVENT_QUERY && !cn->log_always))
   {
-    const char *orig_query= query;
-
-    if (filter_query_type(query, keywords_to_skip))
-    {
-      char fword[MAX_KEYWORD + 1];
-      int len;
-      do
-      {
-        len= get_next_word(query, fword);
-        query+= len ? len : 1;
-        if (len == 3 && strncmp(fword, "FOR", 3) == 0)
-          break;
-      } while (*query);
-
-      if (*query == 0)
-        return 0;
-    }
-
-    if (events & EVENT_QUERY_DDL)
-    {
-      if (!filter_query_type(query, not_ddl_keywords) &&
-          filter_query_type(query, ddl_keywords))
-        goto do_log_query;
-    }
-    if (events & EVENT_QUERY_DML)
-    {
-      if (filter_query_type(query, dml_keywords))
-        goto do_log_query;
-    }
-    if (events & EVENT_QUERY_DML_NO_SELECT)
-    {
-      if (filter_query_type(query, dml_no_select_keywords))
-        goto do_log_query;
-    }
-    if (events & EVENT_QUERY_DCL)
-    {
-      if (filter_query_type(query, dcl_keywords))
-        goto do_log_query;
-    }
-
-    return 0;
-do_log_query:
-    query= orig_query;
+    if (!(events & cmdtype))
+      return 0;
   }
 
   csize= log_header(message, message_size-1, &ev_time,
@@ -1677,27 +1496,31 @@ do_log_query:
   if (query_log_limit > 0 && uh_buffer_size > query_log_limit+2)
     uh_buffer_size= query_log_limit+2;
 
-  switch (filter_query_type(query, passwd_keywords))
+  switch (sql_cmd)
   {
-    case SA_SQLCOM_GRANT:
-    case SA_SQLCOM_CREATE_USER:
-    case SA_SQLCOM_ALTER_USER:
+    case SQLCOM_GRANT:
+    case SQLCOM_CREATE_USER:
+    case SQLCOM_ALTER_USER:
       csize+= escape_string_hide_passwords(query, query_len,
                                            uh_buffer, uh_buffer_size,
                                            "IDENTIFIED", 10, "BY", 2, 0);
       break;
-    case SA_SQLCOM_CHANGE_MASTER:
+#if MYSQL_VERSION_ID >= 80400
+    case SQLCOM_CHANGE_REPLICATION_SOURCE:
+#else
+    case SQLCOM_CHANGE_MASTER:
+#endif
       csize+= escape_string_hide_passwords(query, query_len,
                                            uh_buffer, uh_buffer_size,
-                                           "MASTER_PASSWORD", 15, "=", 1, 0);
+                                           "SOURCE_PASSWORD", 15, "=", 1, 0);
       break;
-    case SA_SQLCOM_CREATE_SERVER:
-    case SA_SQLCOM_ALTER_SERVER:
+    case SQLCOM_CREATE_SERVER:
+    case SQLCOM_ALTER_SERVER:
       csize+= escape_string_hide_passwords(query, query_len,
                                            uh_buffer, uh_buffer_size,
                                            "PASSWORD", 8, NULL, 0, 0);
       break;
-    case SA_SQLCOM_SET_OPTION:
+    case SQLCOM_SET_PASSWORD:
       csize+= escape_string_hide_passwords(query, query_len,
                                            uh_buffer, uh_buffer_size,
                                            "=", 1, NULL, 0, 1);
@@ -1720,10 +1543,11 @@ do_log_query:
 
 static int log_statement(const struct connection_info *cn,
                          const struct mysql_event_general *event,
-                         const char *type)
+                         const char *type, int sql_command)
 {
   return log_statement_ex(cn, event->general_time, event->general_thread_id,
-                          event->general_query.str, event->general_query.length,
+                          sql_command, event->general_query.str,
+                          event->general_query.length,
                           event->general_error_code, type, 1);
 }
 
@@ -1902,7 +1726,7 @@ int auditing(MYSQL_THD thd, mysql_event_class_t event_class, const void *ev)
     if (event->event_subclass == MYSQL_AUDIT_GENERAL_STATUS &&
         event_query_command(event))
     {
-      log_statement(cn, event, "QUERY");
+      log_statement(cn, event, "QUERY", thd_sql_command(thd));
       cn->query_length= 0;
       cn->log_always= 0;
     }
@@ -2226,7 +2050,8 @@ static void log_current_query(MYSQL_THD thd)
   {
     cn->log_always= 1;
     log_statement_ex(cn, cn->query_time, thd_get_thread_id(thd),
-		     cn->query, cn->query_length, 0, "QUERY", 0);
+                     thd_sql_command(thd), cn->query, cn->query_length,
+                     0, "QUERY", 0);
     cn->log_always= 0;
   }
 }

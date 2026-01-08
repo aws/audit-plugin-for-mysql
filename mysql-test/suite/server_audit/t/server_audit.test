@@ -154,6 +154,12 @@ select 2;
 /*! select 2*/;
 /*comment*/ select 2;
 drop table t1_ddl;
+
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
+
 set global server_audit_events='query_ddl,query_dml';
 create table t1_ddl_dml(id int);
 insert into t1_ddl_dml values (1), (2);
@@ -194,6 +200,11 @@ insert into t1_no_select values (1), (2);
 select * from t1_no_select;
 select 2;
 drop table t1_no_select;
+
+create procedure pr1() insert into test.t1 values ("foo", 42);
+create function fn1(i int) returns int deterministic return i+1;
+drop procedure pr1;
+drop function fn1;
 
 set global server_audit_events='';
 set global server_audit_incl_users='user1';
