@@ -247,7 +247,9 @@ create table t1_empty(id int) engine=myisam;
 insert into t1_empty values (1);
 connection default;
 let $wait_condition= SELECT COUNT(*) = 1 FROM t1_empty;
+set global server_audit_logging= off;
 --source include/wait_condition.inc
+set global server_audit_logging= on;
 drop table t1_empty;
 
 # This part of the test appears to be very timing-sensitive,
@@ -264,7 +266,9 @@ set global server_audit_logging= on;
 --sleep 2
 disconnect cn1;
 let $count_sessions=1;
+set global server_audit_logging= off;
 source include/wait_until_count_sessions.inc;
+set global server_audit_logging= on;
 
 drop user user1_empty@localhost;
 

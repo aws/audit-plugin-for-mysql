@@ -288,10 +288,14 @@ create user user1_empty@localhost;
 grant all on sa_db.* to user1_empty@localhost;
 create table t1_empty(id int) engine=myisam;
 insert into t1_empty values (1);
+set global server_audit_logging= off;
+set global server_audit_logging= on;
 drop table t1_empty;
 set global server_audit_logging= off;
 set global server_audit_incl_users='root';
 set global server_audit_logging= on;
++set global server_audit_logging= off;
++set global server_audit_logging= on;
 drop user user1_empty@localhost;
 set global server_audit_incl_users='root, plug_dest';
 CREATE USER plug IDENTIFIED WITH 'test_plugin_server' AS 'plug_dest';
@@ -449,9 +453,11 @@ TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global serv
 TIME,HOSTNAME,user1_empty,localhost,CONNECTION_ID,QUERY_ID,CONNECT,sa_db,,0,SOCKET
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_logging= off',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_logging= on',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_logging= off',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_logging= on',0,,
 TIME,HOSTNAME,user1_empty,localhost,CONNECTION_ID,QUERY_ID,DISCONNECT,sa_db,,0,SOCKET
-TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SHOW GLOBAL STATUS LIKE \'Threads_connected\'',0,,
-TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'SELECT 1 <= 1',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_logging= off',0,,
+TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_logging= on',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'drop user user1_empty@localhost',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'set global server_audit_incl_users=\'root, plug_dest\'',0,,
 TIME,HOSTNAME,root,localhost,CONNECTION_ID,QUERY_ID,QUERY,sa_db,'CREATE USER \'plug\'@\'%\' IDENTIFIED WITH \'test_plugin_server\' AS \'plug_dest\'',0,,
