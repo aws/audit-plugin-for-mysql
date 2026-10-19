@@ -1,0 +1,54 @@
+# Issue: MYSQL-7639
+# JIRA: https://jira.rds.a2z.com/browse/MYSQL-7639
+# Description: The database field of QUERY events is empty after the session
+#              switches database with COM_INIT_DB (the mysql client USE
+#              command), because MySQL does not pass the database name in the
+#              "Init DB" general event.
+
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+--let $audit_file= $MYSQLD_DATADIR/server_audit.log
+
+--disable_query_log
+INSTALL PLUGIN server_audit soname 'server_audit.so';
+--enable_query_log
+
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+CREATE DATABASE `db-3`;
+SET GLOBAL server_audit_file_path='server_audit.log';
+SET GLOBAL server_audit_output_type=file;
+SET GLOBAL server_audit_events='QUERY';
+SET GLOBAL server_audit_logging=on;
+
+--echo ---
+--echo Test 1: connect without a database, then COM_INIT_DB
+--echo ---
+# The mysql client sends "use" as COM_INIT_DB only when it is on its own line
+# and binary mode (enabled by default in RDS) is off.
+--exec $MYSQL --skip-binary-mode < $MYSQL_TEST_DIR/suite/server_audit/t/server_audit_init_db.sql > /dev/null
+
+--echo ---
+--echo Test 2: connect with a database, then COM_INIT_DB
+--echo ---
+--exec printf "SELECT 'case2-db1';\nuse db2\nSELECT 'case2-db2';\nDROP TABLE IF EXISTS t1;\n" | $MYSQL --skip-binary-mode db1 > /dev/null
+
+--echo ---
+--echo Test 3: COM_INIT_DB to a database that does not exist keeps the database
+--echo ---
+--exec printf "use no_such_db\nSELECT 'case3-db1';\n" | $MYSQL --skip-binary-mode db1 --force > /dev/null 2>&1
+
+--echo ---
+--echo Audit log: operation, database, query, return code
+--echo ---
+--exec grep "'case\|'CREATE TABLE t1\|'DROP TABLE" $audit_file | cut -d, -f7-10
+
+# Cleanup
+--disable_query_log
+SET GLOBAL server_audit_logging=0;
+SET GLOBAL server_audit_events='';
+--exec rm $audit_file
+UNINSTALL PLUGIN server_audit;
+--enable_query_log
+DROP DATABASE db1;
+DROP DATABASE db2;
+DROP DATABASE `db-3`;

@@ -24,6 +24,7 @@
 #include <my_config.h>
 #include <assert.h>
 #include "sql/log.h"
+#include "sql/sql_class.h"
 
 #ifndef _WIN32
 #define DO_SYSLOG
@@ -956,7 +957,7 @@ static char escaped_char(char c)
 }
 
 
-static void setup_connection_initdb(struct connection_info *cn,
+static void setup_connection_initdb(MYSQL_THD thd, struct connection_info *cn,
     const struct mysql_event_general *event)
 {
   size_t user_len;
@@ -966,8 +967,9 @@ static void setup_connection_initdb(struct connection_info *cn,
   cn->query_id= 0;
   cn->query_length= 0;
   cn->log_always= 0;
+  /* MySQL doesn't pass the database name in general_query of "Init DB". */
   get_str_n(cn->db, &cn->db_length, sizeof(cn->db),
-            event->general_query.str, event->general_query.length);
+            thd->db().str, thd->db().length);
 
   if (get_user_host(event->general_user.str, event->general_user.length,
                     uh_buffer, sizeof(uh_buffer),
@@ -1591,7 +1593,7 @@ static struct connection_info ci_disconnect_buffer;
 #define AA_CHANGE_USER 2
 
 
-static void update_connection_info(struct connection_info *cn,
+static void update_connection_info(MYSQL_THD thd, struct connection_info *cn,
     mysql_event_class_t event_class, const void *ev, int *after_action)
 {
   *after_action= 0;
@@ -1612,7 +1614,7 @@ static void update_connection_info(struct connection_info *cn,
           {
             /* Change DB */
             get_str_n(cn->db, &cn->db_length, sizeof(cn->db),
-                event->general_query.str, event->general_query.length);
+                thd->db().str, thd->db().length);
           }
           cn->query_id = query_counter++;
           cn->query= event->general_query.str;
@@ -1621,7 +1623,7 @@ static void update_connection_info(struct connection_info *cn,
           update_general_user(cn, event);
         }
         else if (init_db_command)
-          setup_connection_initdb(cn, event);
+          setup_connection_initdb(thd, cn, event);
         else if (event_query_command(event))
           setup_connection_query(cn, event);
         else
@@ -1704,9 +1706,11 @@ int auditing(MYSQL_THD thd, mysql_event_class_t event_class, const void *ev)
   if (!thd || internal_stop_logging)
     return 0;
 
-  cn= get_loc_info(thd);
+  /* loc_info can be NULL in a session where the plugin was reinstalled. */
+  if (!(cn= get_loc_info(thd)))
+    return 0;
 
-  update_connection_info(cn, event_class, ev, &after_action);
+  update_connection_info(thd, cn, event_class, ev, &after_action);
 
   if (!logging)
   {
@@ -2043,9 +2047,8 @@ static void mark_always_logged(MYSQL_THD thd)
 static void log_current_query(MYSQL_THD thd)
 {
   struct connection_info *cn;
-  if (!thd)
+  if (!thd || !(cn= get_loc_info(thd)))
     return;
-  cn= get_loc_info(thd);
   if (!ci_needs_setup(cn) && cn->query_length)
   {
     cn->log_always= 1;
