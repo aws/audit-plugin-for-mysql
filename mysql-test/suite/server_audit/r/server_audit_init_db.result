@@ -1,0 +1,35 @@
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+CREATE DATABASE `db-3`;
+SET GLOBAL server_audit_file_path='server_audit.log';
+SET GLOBAL server_audit_output_type=file;
+SET GLOBAL server_audit_events='QUERY';
+SET GLOBAL server_audit_logging=on;
+---
+Test 1: connect without a database, then COM_INIT_DB
+---
+---
+Test 2: connect with a database, then COM_INIT_DB
+---
+---
+Test 3: COM_INIT_DB to a database that does not exist keeps the database
+---
+---
+Audit log: operation, database, query, return code
+---
+QUERY,,'SELECT \'case1-none\'',0
+QUERY,db1,'CREATE TABLE t1 (id INT)',0
+QUERY,db1,'SELECT \'case1-db1\'',0
+QUERY,db2,'CREATE TABLE t1 (id INT)',0
+QUERY,db2,'SELECT \'case1-db2\'',0
+QUERY,db2,'DROP TABLE t1',0
+QUERY,db-3,'SELECT \'case1-db-3\'',0
+QUERY,db1,'SELECT \'case2-db1\'',0
+QUERY,db2,'SELECT \'case2-db2\'',0
+QUERY,db2,'DROP TABLE IF EXISTS t1',0
+QUERY,db1,'SELECT \'case3-db1\'',0
+Warnings:
+Warning	1620	Plugin is busy and will be uninstalled on shutdown
+DROP DATABASE db1;
+DROP DATABASE db2;
+DROP DATABASE `db-3`;
